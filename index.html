@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liseuse Google Books - Lecture Rapide RSVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .auth-section {
+            padding: 40px;
+            text-align: center;
+        }
+
+        .auth-section button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+        }
+
+        .auth-section button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .books-in-progress {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .books-in-progress h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .progress-books-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .progress-book-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-book-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .progress-book-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .progress-book-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .progress-book-bar {
+            background: #e0e0e0;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-book-bar-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        .progress-book-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .progress-book-percent {
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .no-books-message {
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+            padding: 20px;
+        }
+
+        .main-content {
+            display: none;
+        }
+
+        .book-selector {
+            padding: 30px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .book-selector h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .book-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .book-item {
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 10px;
+            padding: 10px;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .book-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .book-item.selected {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+
+        .book-cover {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .book-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .book-author {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .rsvp-reader {
+            padding: 40px;
+            display: none;
+        }
+
+        .rsvp-display {
+            background: #000000;
+            border-radius: 15px;
+            padding: 60px;
+            text-align: center;
+            margin-bottom: 30px;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border: 2px solid #333;
+        }
+
+        .rsvp-pointer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 3px;
+            height: 80px;
+            background: #ff0000;
+            opacity: 0.6;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .rsvp-pointer::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid #ff0000;
+            opacity: 0.8;
+        }
+
+        .rsvp-pointer::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid #ff0000;
+            opacity: 0.8;
+        }
+
+        .rsvp-word {
+            font-size: 48px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 0px;
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            position: relative;
+            z-index: 5;
+            display: inline-block;
+            white-space: nowrap;
+        }
+
+        .rsvp-word span {
+            display: inline-block;
+            text-align: center;
+        }
+
+        .rsvp-word .focus {
+            color: #ff0000;
+            font-size: 52px;
+            font-weight: 900;
+        }
+
+        .rsvp-word.centered {
+            transform: none !important;
+            text-align: center;
+        }
+
+        .rsvp-word.centered span {
+            width: auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .controls button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .controls button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .controls button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #f8f9fa;
+            padding: 15px 25px;
+            border-radius: 25px;
+        }
+
+        .speed-control label {
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .speed-control input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .speed-control input {
+            width: 150px;
+        }
+
+        .speed-value {
+            font-weight: 700;
+            color: #667eea;
+            min-width: 70px;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .info {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .classic-reader {
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 20px 30px;
+            margin-top: 20px;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 2px solid #333;
+        }
+
+        .classic-reader-text {
+            color: #cccccc;
+            font-size: 16px;
+            line-height: 1.8;
+            font-family: 'Arial', sans-serif;
+            text-align: justify;
+        }
+
+        .classic-reader-text .current-word {
+            background: #ff0000;
+            color: #ffffff;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+
+        .classic-reader-text .past-word {
+            color: #666666;
+        }
+
+        .classic-reader-text .future-word {
+            color: #999999;
+        }
+
+        .classic-reader::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .classic-reader::-webkit-scrollbar-track {
+            background: #0a0a0a;
+            border-radius: 10px;
+        }
+
+        .classic-reader::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
+        .classic-reader::-webkit-scrollbar-thumb:hover {
+            background: #5568d3;
+        }
+
+        .rsvp-display.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000000;
+            z-index: 9999;
+            margin: 0;
+            border-radius: 0;
+            border: none;
+            cursor: pointer;
+        }
+
+        .rsvp-display.fullscreen .rsvp-pointer {
+            height: 100px;
+        }
+
+        .rsvp-display.fullscreen .rsvp-word {
+            font-size: 64px;
+        }
+
+        .rsvp-display.fullscreen .rsvp-word .focus {
+            font-size: 72px;
+        }
+
+        .fullscreen-exit-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #666;
+            font-size: 14px;
+            opacity: 0.7;
+            z-index: 10000;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+            .rsvp-word {
+                font-size: 32px;
+            }
+            
+            .rsvp-word .focus {
+                font-size: 40px;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            .speed-control {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Liseuse Google Books RSVP</h1>
+            <p>Lecture rapide avec présentation visuelle sérielle</p>
+        </div>
+
+        <div class="auth-section" id="authSection">
+            <div id="booksInProgress" style="margin-bottom: 30px;"></div>
+            
+            <p style="margin-bottom: 20px; color: #666;">Connectez-vous avec votre compte Google pour accéder à vos livres</p>
+            <button onclick="handleSignIn()">Se connecter avec Google</button>
+            
+            <div style="margin: 30px 0; color: #999; font-weight: 600;">OU</div>
+            
+            <p style="margin-bottom: 15px; color: #666;">Importez votre propre PDF</p>
+            <input type="file" id="pdfInput" accept=".pdf" style="display: none;" onchange="handlePdfUpload(event)">
+            <button onclick="document.getElementById('pdfInput').click()" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">📄 Importer un PDF</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <div class="book-selector" id="bookSelector">
+                <h2>Sélectionnez un livre</h2>
+                <div style="margin-bottom: 20px;">
+                    <button onclick="showSavedBooks()" style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">📚 Mes livres sauvegardés</button>
+                    <button onclick="showGoogleBooks()" style="background: #764ba2; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600; margin-left: 10px;">☁️ Google Books</button>
+                </div>
+                <div class="loading" id="bookLoading">Chargement de vos livres...</div>
+                <div class="book-list" id="bookList"></div>
+            </div>
+
+            <div class="rsvp-reader" id="rsvpReader">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0 / 0 mots (0%)</div>
+
+                <div class="rsvp-display">
+                    <div class="rsvp-pointer"></div>
+                    <div class="rsvp-word centered" id="rsvpWord"><span style="color: #ffffff;">Sélectionnez un livre</span></div>
+                </div>
+
+                <div class="classic-reader" id="classicReader" style="display: none;">
+                    <div class="classic-reader-text" id="classicReaderText"></div>
+                </div>
+
+                <div class="controls">
+                    <button onclick="startReading()" id="playBtn">▶ Lecture</button>
+                    <button onclick="pauseReading()" id="pauseBtn" disabled>⏸ Pause</button>
+                    <button onclick="resetReading()">⏮ Recommencer</button>
+                    <button onclick="toggleFullscreen()" id="fullscreenBtn">⛶ Plein écran</button>
+                    <button onclick="handleChangeBook()" id="changeBookBtn">📚 Changer de livre</button>
+                </div>
+
+                <div class="controls">
+                    <div class="speed-control">
+                        <label for="wpmSlider">Vitesse:</label>
+                        <input type="range" id="wpmSlider" min="100" max="1000" value="250" step="50" oninput="updateSpeed()">
+                        <span class="speed-value" id="wpmValue">250 mpm</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="speed-control">
+                        <label for="maxWordLengthSlider">Longueur max mot:</label>
+                        <input type="range" id="maxWordLengthSlider" min="6" max="15" value="12" step="1" oninput="updateMaxWordLength()">
+                        <span class="speed-value" id="maxWordLengthValue">12 car.</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="speed-control">
+                        <label>
+                            <input type="checkbox" id="autospeedCheck" checked onchange="updateSettings()">
+                            Accélération progressive
+                        </label>
+                        <span class="speed-value" id="currentSpeedDisplay">250 mpm</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="speed-control">
+                        <label>
+                            <input type="checkbox" id="pausePunctuationCheck" checked onchange="updateSettings()">
+                            Pause après ponctuation
+                        </label>
+                        <input type="number" id="pausePunctuationDuration" min="0.5" max="5" step="0.1" value="2.5" style="width: 70px; padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
+                        <span style="font-size: 14px; color: #666;">× durée</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="speed-control">
+                        <label>
+                            <input type="checkbox" id="pauseProperNounCheck" checked onchange="updateSettings()">
+                            Pause sur noms propres
+                        </label>
+                        <input type="number" id="pauseProperNounDuration" min="0.5" max="5" step="0.1" value="1.8" style="width: 70px; padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
+                        <span style="font-size: 14px; color: #666;">× durée</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Configurer PDF.js
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        let accessToken = null;
+        let books = [];
+        let currentBook = null;
+        let words = [];
+        let currentWordIndex = 0;
+        let isPlaying = false;
+        let intervalId = null;
+        let wpm = 250;
+        let baseWpm = 250; // Vitesse de base pour l'accélération progressive
+        let currentWpm = 250; // Vitesse actuelle
+        let autoSpeedEnabled = true;
+        let pauseOnPunctuation = true;
+        let pauseOnProperNoun = true;
+        let pausePunctuationMultiplier = 2.5;
+        let pauseProperNounMultiplier = 1.8;
+        let maxWordLength = 12;
+        let wordStartTime = 0;
+        let currentBookId = null; // ID unique pour le livre actuel
+
+        // Configuration Google OAuth
+        const CLIENT_ID = '698276767759-1rc9j52s42p4g13ljedjcre2spth8r8g.apps.googleusercontent.com';
+        const SCOPES = 'https://www.googleapis.com/auth/books';
+
+        // Afficher les livres en cours au chargement de la page
+        window.addEventListener('DOMContentLoaded', () => {
+            displayBooksInProgress();
+        });
+
+        function displayBooksInProgress() {
+            const container = document.getElementById('booksInProgress');
+            const savedBooks = loadSavedBooks();
+            
+            if (savedBooks.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            // Filtrer les livres qui ont une progression > 0%
+            const booksWithProgress = savedBooks
+                .map(book => {
+                    const progress = loadProgress(book.id);
+                    return { ...book, progress };
+                })
+                .filter(book => book.progress && book.progress.wordIndex > 0)
+                .sort((a, b) => {
+                    // Trier par date de dernière lecture (plus récent en premier)
+                    return new Date(b.progress.lastUpdate) - new Date(a.progress.lastUpdate);
+                });
+
+            if (booksWithProgress.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '<div class="books-in-progress">';
+            html += '<h3>📚 Reprendre la lecture</h3>';
+            html += '<div class="progress-books-list">';
+
+            booksWithProgress.forEach(book => {
+                const percent = Math.round((book.progress.wordIndex / book.progress.totalWords) * 100);
+                const lastRead = new Date(book.progress.lastUpdate).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'short'
+                });
+
+                html += `
+                    <div class="progress-book-card" onclick="resumeBook('${book.id}')">
+                        <div class="progress-book-title" title="${book.title}">${book.title}</div>
+                        <div class="progress-book-stats">
+                            <div class="progress-book-bar">
+                                <div class="progress-book-bar-fill" style="width: ${percent}%"></div>
+                            </div>
+                            <div class="progress-book-info">
+                                <span>${lastRead}</span>
+                                <span class="progress-book-percent">${percent}%</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div></div>';
+            container.innerHTML = html;
+        }
+
+        async function resumeBook(bookId) {
+            // Charger directement le livre et démarrer la lecture
+            const bookData = loadBookData(bookId);
+            if (!bookData) {
+                alert('Erreur : livre introuvable');
+                return;
+            }
+
+            currentBookId = bookId;
+            words = bookData.words;
+            currentBook = {
+                volumeInfo: {
+                    title: bookData.title,
+                    authors: [bookData.author]
+                }
+            };
+
+            // Charger la progression
+            const savedProgress = loadProgress(bookId);
+            if (savedProgress && savedProgress.totalWords === words.length) {
+                currentWordIndex = savedProgress.wordIndex;
+            } else {
+                currentWordIndex = 0;
+            }
+
+            // Passer à l'interface de lecture
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            document.getElementById('bookSelector').style.display = 'none';
+            document.getElementById('rsvpReader').style.display = 'block';
+            
+            updateProgress();
+            
+            // Afficher le mot actuel (sans le passer en mode centré)
+            if (currentWordIndex < words.length && currentWordIndex > 0) {
+                displayWord(words[currentWordIndex], false);
+                // Mettre à jour le lecteur classique
+                updateClassicReader();
+            } else {
+                displayWord('<span style="color: #00ff00;">Prêt à commencer !</span>', true);
+            }
+        }
+
+        // Fonctions de sauvegarde et chargement
+        function saveProgress() {
+            if (!currentBookId) return;
+            
+            const progress = {
+                bookId: currentBookId,
+                wordIndex: currentWordIndex,
+                totalWords: words.length,
+                lastUpdate: new Date().toISOString()
+            };
+            
+            localStorage.setItem(`rsvp_progress_${currentBookId}`, JSON.stringify(progress));
+        }
+
+        function loadProgress(bookId) {
+            const saved = localStorage.getItem(`rsvp_progress_${bookId}`);
+            if (saved) {
+                return JSON.parse(saved);
+            }
+            return null;
+        }
+
+        function saveBookData(bookId, title, author, wordsArray) {
+            const bookData = {
+                id: bookId,
+                title: title,
+                author: author,
+                words: wordsArray,
+                addedDate: new Date().toISOString()
+            };
+            
+            localStorage.setItem(`rsvp_book_${bookId}`, JSON.stringify(bookData));
+            
+            // Sauvegarder dans la liste des livres
+            let savedBooks = JSON.parse(localStorage.getItem('rsvp_saved_books') || '[]');
+            if (!savedBooks.find(b => b.id === bookId)) {
+                savedBooks.push({ id: bookId, title: title, author: author });
+                localStorage.setItem('rsvp_saved_books', JSON.stringify(savedBooks));
+            }
+        }
+
+        function loadSavedBooks() {
+            return JSON.parse(localStorage.getItem('rsvp_saved_books') || '[]');
+        }
+
+        function loadBookData(bookId) {
+            const saved = localStorage.getItem(`rsvp_book_${bookId}`);
+            if (saved) {
+                return JSON.parse(saved);
+            }
+            return null;
+        }
+
+        function handleSignIn() {
+            // Initialiser Google Identity Services
+            google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (response) => {
+                    if (response.access_token) {
+                        accessToken = response.access_token;
+                        document.getElementById('authSection').style.display = 'none';
+                        document.getElementById('mainContent').style.display = 'block';
+                        loadBooks();
+                    }
+                },
+            }).requestAccessToken();
+        }
+
+        async function loadBooks() {
+            try {
+                const response = await fetch('https://www.googleapis.com/books/v1/mylibrary/bookshelves/0/volumes?maxResults=40', {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+                books = data.items || [];
+                
+                document.getElementById('bookLoading').style.display = 'none';
+                
+                if (books.length === 0) {
+                    document.getElementById('bookList').innerHTML = '<div class="info">Aucun livre trouvé dans votre bibliothèque. Ajoutez des livres sur Google Books.</div>';
+                    return;
+                }
+
+                displayBooks();
+            } catch (error) {
+                console.error('Erreur:', error);
+                document.getElementById('bookLoading').innerHTML = '<div class="error">Erreur lors du chargement des livres. Vérifiez vos permissions.</div>';
+            }
+        }
+
+        function displayBooks() {
+            const bookList = document.getElementById('bookList');
+            bookList.innerHTML = '';
+
+            books.forEach((book, index) => {
+                const volumeInfo = book.volumeInfo;
+                const bookDiv = document.createElement('div');
+                bookDiv.className = 'book-item';
+                bookDiv.onclick = () => selectBook(index);
+
+                const thumbnail = volumeInfo.imageLinks?.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="200"%3E%3Crect fill="%23ddd" width="128" height="200"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" fill="%23999" font-size="14"%3EAucune image%3C/text%3E%3C/svg%3E';
+
+                bookDiv.innerHTML = `
+                    <img src="${thumbnail}" alt="${volumeInfo.title}" class="book-cover">
+                    <div class="book-title">${volumeInfo.title}</div>
+                    <div class="book-author">${volumeInfo.authors?.join(', ') || 'Auteur inconnu'}</div>
+                `;
+
+                bookList.appendChild(bookDiv);
+            });
+        }
+
+        async function selectBook(index) {
+            currentBook = books[index];
+            
+            // Marquer le livre sélectionné
+            document.querySelectorAll('.book-item').forEach((item, i) => {
+                item.classList.toggle('selected', i === index);
+            });
+
+            // Afficher le lecteur RSVP
+            document.getElementById('bookSelector').style.display = 'none';
+            document.getElementById('rsvpReader').style.display = 'block';
+
+            // Charger le contenu du livre
+            await loadBookContent();
+        }
+
+        async function loadBookContent() {
+            try {
+                const volumeId = currentBook.id;
+                
+                // Note: L'API Google Books ne fournit pas toujours le texte complet
+                // Ceci est une démonstration avec du texte d'exemple
+                
+                // Tentative de récupération du contenu
+                const response = await fetch(`https://www.googleapis.com/books/v1/volumes/${volumeId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                // Utiliser la description ou un texte d'exemple
+                let text = data.volumeInfo.description || 
+                          `Ceci est une démonstration de la liseuse RSVP pour "${data.volumeInfo.title}". 
+                           L'API Google Books ne fournit pas toujours le texte complet des livres pour des raisons de droits d'auteur. 
+                           Pour une utilisation réelle, vous devriez importer le texte complet du livre ou utiliser l'API de lecture Google Play Books. 
+                           La méthode RSVP (Rapid Serial Visual Presentation) affiche un mot à la fois au centre de l'écran, 
+                           ce qui permet une lecture plus rapide en éliminant les mouvements oculaires. 
+                           Vous pouvez ajuster la vitesse de lecture en mots par minute selon votre confort. 
+                           Commencez lentement puis augmentez progressivement la vitesse pour améliorer votre vitesse de lecture.`;
+
+                // Nettoyer et découper le texte en mots
+                text = text.replace(/<[^>]*>/g, ''); // Supprimer les balises HTML
+                words = text.split(/\s+/).filter(word => word.length > 0);
+                
+                currentWordIndex = 0;
+                updateProgress();
+                displayWord('<span style="color: #ffffff;">Prêt à commencer</span>', true);
+                
+            } catch (error) {
+                console.error('Erreur:', error);
+                document.getElementById('rsvpWord').innerHTML = '<div class="error">Erreur lors du chargement du contenu</div>';
+            }
+        }
+
+        function startReading() {
+            if (words.length === 0) return;
+            
+            isPlaying = true;
+            document.getElementById('playBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+            
+            // Afficher le lecteur classique
+            document.getElementById('classicReader').style.display = 'block';
+            
+            // Réinitialiser la vitesse actuelle seulement au tout début
+            if (currentWordIndex === 0) {
+                currentWpm = baseWpm;
+            }
+            
+            showNextWord();
+        }
+
+        function showNextWord() {
+            if (!isPlaying || currentWordIndex >= words.length) {
+                if (currentWordIndex >= words.length) {
+                    pauseReading();
+                    displayWord('<span style="color: #00ff00;">✓ Lecture terminée</span>', true);
+                    saveProgress();
+                }
+                return;
+            }
+
+            let word = words[currentWordIndex];
+            let originalWord = word;
+            
+            // Couper les mots trop longs selon le paramètre
+            if (word.length > maxWordLength) {
+                // Calculer le point de coupure pour avoir des parties équilibrées
+                let cutPoint = Math.floor(word.length / 2);
+                
+                // S'assurer qu'aucune partie ne fait moins de 3 caractères
+                if (cutPoint < 3) {
+                    cutPoint = 3;
+                } else if (word.length - cutPoint < 3) {
+                    cutPoint = word.length - 3;
+                }
+                
+                let firstPart = word.substring(0, cutPoint) + '-';
+                let secondPart = word.substring(cutPoint);
+                
+                // Vérifier que la deuxième partie n'est pas trop courte
+                if (secondPart.length >= 3) {
+                    words.splice(currentWordIndex + 1, 0, secondPart);
+                    word = firstPart;
+                }
+                // Sinon, on garde le mot entier même s'il est long
+            }
+            
+            displayWord(word, false);
+            
+            // Calculer le délai de base
+            let baseDelay = 60000 / currentWpm;
+            let delay = baseDelay;
+            
+            // Récupérer les multiplicateurs depuis les inputs
+            pausePunctuationMultiplier = parseFloat(document.getElementById('pausePunctuationDuration').value);
+            pauseProperNounMultiplier = parseFloat(document.getElementById('pauseProperNounDuration').value);
+            
+            // Vérifier si on doit faire une pause après ponctuation
+            if (pauseOnPunctuation && /[.!?;:]$/.test(word)) {
+                delay = baseDelay * pausePunctuationMultiplier;
+            }
+            
+            // Vérifier si c'est un nom propre
+            if (pauseOnProperNoun && currentWordIndex > 0) {
+                let prevWord = words[currentWordIndex - 1];
+                if (/^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ]/.test(word) && !/[.!?]$/.test(prevWord)) {
+                    delay = baseDelay * pauseProperNounMultiplier;
+                }
+            }
+            
+            currentWordIndex++;
+            updateProgress();
+            
+            // Sauvegarder la progression tous les 10 mots
+            if (currentWordIndex % 10 === 0) {
+                saveProgress();
+            }
+            
+            // Accélération progressive
+            if (autoSpeedEnabled && currentWordIndex % 50 === 0) {
+                currentWpm = Math.min(baseWpm * 2, currentWpm + 5);
+                document.getElementById('currentSpeedDisplay').textContent = Math.round(currentWpm) + ' mpm';
+            }
+            
+            setTimeout(showNextWord, delay);
+        }
+
+        function displayWord(word, centered = false) {
+            const wordElement = document.getElementById('rsvpWord');
+            
+            // Si c'est un message centré (pas un mot du livre)
+            if (centered) {
+                wordElement.className = 'rsvp-word centered';
+                wordElement.innerHTML = word;
+                wordElement.style.transform = 'none';
+                return;
+            }
+            
+            wordElement.className = 'rsvp-word';
+            
+            // Trouver la lettre centrale (ORP - Optimal Recognition Point)
+            let focusIndex;
+            if (word.length === 1) {
+                focusIndex = 0;
+            } else if (word.length === 2) {
+                focusIndex = 0;
+            } else {
+                focusIndex = Math.floor(word.length / 2);
+            }
+            
+            // Construire le HTML avec chaque lettre dans un span
+            let html = '';
+            for (let i = 0; i < word.length; i++) {
+                if (i === focusIndex) {
+                    html += `<span class="focus">${word[i]}</span>`;
+                } else {
+                    html += `<span>${word[i]}</span>`;
+                }
+            }
+            
+            wordElement.innerHTML = html;
+            
+            // Attendre que le DOM soit mis à jour pour calculer les positions réelles
+            requestAnimationFrame(() => {
+                const spans = wordElement.querySelectorAll('span');
+                if (spans.length === 0) return;
+                
+                // Calculer la position du centre du mot
+                let totalWidth = 0;
+                let focusCenter = 0;
+                
+                for (let i = 0; i < spans.length; i++) {
+                    const spanWidth = spans[i].offsetWidth;
+                    if (i < focusIndex) {
+                        focusCenter += spanWidth;
+                    } else if (i === focusIndex) {
+                        focusCenter += spanWidth / 2;
+                    }
+                    totalWidth += spanWidth;
+                }
+                
+                // Décalage nécessaire pour centrer la lettre focale
+                const offset = focusCenter - (totalWidth / 2);
+                wordElement.style.transform = `translateX(${-offset}px)`;
+            });
+            
+            // Mettre à jour le lecteur classique
+            updateClassicReader();
+        }
+
+        function updateClassicReader() {
+            if (words.length === 0 || !document.getElementById('classicReader')) return;
+            
+            const classicReaderText = document.getElementById('classicReaderText');
+            const contextRange = 30; // Nombre de mots avant et après le mot actuel
+            
+            const startIndex = Math.max(0, currentWordIndex - contextRange);
+            const endIndex = Math.min(words.length, currentWordIndex + contextRange);
+            
+            let html = '';
+            
+            for (let i = startIndex; i < endIndex; i++) {
+                if (i < currentWordIndex) {
+                    html += `<span class="past-word">${words[i]} </span>`;
+                } else if (i === currentWordIndex) {
+                    html += `<span class="current-word">${words[i]}</span> `;
+                } else {
+                    html += `<span class="future-word">${words[i]} </span>`;
+                }
+            }
+            
+            classicReaderText.innerHTML = html;
+            
+            // Auto-scroll pour garder le mot actuel visible
+            const currentWordElement = classicReaderText.querySelector('.current-word');
+            if (currentWordElement) {
+                currentWordElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function pauseReading() {
+            isPlaying = false;
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+        }
+
+        function resetReading() {
+            pauseReading();
+            currentWordIndex = 0;
+            currentWpm = baseWpm;
+            document.getElementById('currentSpeedDisplay').textContent = baseWpm + ' mpm';
+            updateProgress();
+            displayWord('<span style="color: #ffffff;">Prêt à recommencer</span>', true);
+            document.getElementById('classicReader').style.display = 'none';
+        }
+
+        function updateSpeed() {
+            baseWpm = parseInt(document.getElementById('wpmSlider').value);
+            currentWpm = baseWpm; // Réinitialiser la vitesse actuelle à la nouvelle base
+            document.getElementById('wpmValue').textContent = `${baseWpm} mpm`;
+            document.getElementById('currentSpeedDisplay').textContent = `${baseWpm} mpm`;
+            
+            // Pas besoin de redémarrer la lecture, le nouveau timing sera appliqué au prochain mot
+        }
+
+        function updateMaxWordLength() {
+            maxWordLength = parseInt(document.getElementById('maxWordLengthSlider').value);
+            document.getElementById('maxWordLengthValue').textContent = `${maxWordLength} car.`;
+        }
+
+        function updateSettings() {
+            autoSpeedEnabled = document.getElementById('autospeedCheck').checked;
+            pauseOnPunctuation = document.getElementById('pausePunctuationCheck').checked;
+            pauseOnProperNoun = document.getElementById('pauseProperNounCheck').checked;
+            pausePunctuationMultiplier = parseFloat(document.getElementById('pausePunctuationDuration').value);
+            pauseProperNounMultiplier = parseFloat(document.getElementById('pauseProperNounDuration').value);
+        }
+
+        let isFullscreen = false;
+        let fullscreenHint = null;
+
+        function toggleFullscreen() {
+            const rsvpDisplay = document.querySelector('.rsvp-display');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            
+            if (isFullscreen) {
+                // Sortir du plein écran
+                rsvpDisplay.classList.remove('fullscreen');
+                fullscreenBtn.textContent = '⛶ Plein écran';
+                isFullscreen = false;
+                
+                // Retirer l'indication
+                if (fullscreenHint) {
+                    fullscreenHint.remove();
+                    fullscreenHint = null;
+                }
+                
+                // Sortir du mode plein écran du navigateur si actif
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                }
+            } else {
+                // Entrer en plein écran
+                rsvpDisplay.classList.add('fullscreen');
+                fullscreenBtn.textContent = '⛶ Quitter plein écran';
+                isFullscreen = true;
+                
+                // Ajouter une indication pour sortir
+                fullscreenHint = document.createElement('div');
+                fullscreenHint.className = 'fullscreen-exit-hint';
+                fullscreenHint.textContent = 'Cliquez n\'importe où ou appuyez sur Échap pour quitter';
+                document.body.appendChild(fullscreenHint);
+                
+                // Masquer l'indication après 3 secondes
+                setTimeout(() => {
+                    if (fullscreenHint) {
+                        fullscreenHint.style.opacity = '0';
+                        fullscreenHint.style.transition = 'opacity 0.5s';
+                    }
+                }, 3000);
+                
+                // Essayer d'activer le plein écran du navigateur
+                if (rsvpDisplay.requestFullscreen) {
+                    rsvpDisplay.requestFullscreen().catch(err => {
+                        console.log('Plein écran natif non disponible:', err);
+                    });
+                } else if (rsvpDisplay.webkitRequestFullscreen) {
+                    rsvpDisplay.webkitRequestFullscreen();
+                } else if (rsvpDisplay.msRequestFullscreen) {
+                    rsvpDisplay.msRequestFullscreen();
+                }
+            }
+        }
+
+        // Clic sur le lecteur RSVP pour sortir du plein écran
+        document.addEventListener('DOMContentLoaded', () => {
+            const rsvpDisplay = document.querySelector('.rsvp-display');
+            if (rsvpDisplay) {
+                rsvpDisplay.addEventListener('click', (e) => {
+                    if (isFullscreen && e.target.closest('.rsvp-display')) {
+                        toggleFullscreen();
+                    }
+                });
+            }
+        });
+
+        // Détecter la sortie du plein écran avec Echap
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && isFullscreen) {
+                toggleFullscreen();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isFullscreen) {
+                toggleFullscreen();
+            }
+        });
+
+        function updateProgress() {
+            const progress = words.length > 0 ? (currentWordIndex / words.length) * 100 : 0;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+            document.getElementById('progressText').textContent = 
+                `${currentWordIndex} / ${words.length} mots (${Math.round(progress)}%)`;
+        }
+
+        function changeBook() {
+            pauseReading();
+            document.getElementById('rsvpReader').style.display = 'none';
+            document.getElementById('bookSelector').style.display = 'block';
+            currentWordIndex = 0;
+            words = [];
+        }
+
+        function handleChangeBook() {
+            // Si c'est un PDF importé, retourner à l'écran d'accueil
+            if (currentBook && currentBook.volumeInfo.authors && currentBook.volumeInfo.authors[0] === 'PDF importé') {
+                returnToStart();
+            } else {
+                // Sinon, retourner à la sélection des livres Google
+                changeBook();
+            }
+            document.getElementById('classicReader').style.display = 'none';
+        }
+
+        async function handlePdfUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            document.getElementById('bookSelector').style.display = 'none';
+            document.getElementById('rsvpReader').style.display = 'block';
+
+            displayWord('<span style="color: #ffaa00;">Extraction du texte du PDF...</span>', true);
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                let fullText = '';
+                
+                // Extraire le texte de toutes les pages
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + ' ';
+                }
+
+                // Nettoyer et découper le texte en mots
+                fullText = fullText.replace(/\s+/g, ' ').trim();
+                words = fullText.split(/\s+/).filter(word => word.length > 0);
+                
+                // Créer un ID unique basé sur le nom du fichier et la date
+                currentBookId = `pdf_${file.name}_${Date.now()}`;
+                
+                // Créer un objet livre fictif pour la session
+                currentBook = {
+                    volumeInfo: {
+                        title: file.name,
+                        authors: ['PDF importé']
+                    }
+                };
+
+                // Sauvegarder le livre
+                saveBookData(currentBookId, file.name, 'PDF importé', words);
+                
+                // Vérifier s'il y a une progression sauvegardée
+                const savedProgress = loadProgress(currentBookId);
+                if (savedProgress && savedProgress.totalWords === words.length) {
+                    const resume = confirm(`Progression trouvée : ${savedProgress.wordIndex} / ${savedProgress.totalWords} mots (${Math.round(savedProgress.wordIndex / savedProgress.totalWords * 100)}%). Reprendre la lecture ?`);
+                    if (resume) {
+                        currentWordIndex = savedProgress.wordIndex;
+                    } else {
+                        currentWordIndex = 0;
+                    }
+                } else {
+                    currentWordIndex = 0;
+                }
+                
+                updateProgress();
+                displayWord(`<span style="color: #00ff00;">Prêt à lire - ${pdf.numPages} pages, ${words.length} mots</span>`, true);
+
+            } catch (error) {
+                console.error('Erreur lors de la lecture du PDF:', error);
+                document.getElementById('rsvpWord').innerHTML = '<div class="error">Erreur lors de la lecture du PDF. Assurez-vous qu\'il s\'agit d\'un PDF valide avec du texte extractible.</div>';
+            }
+        }
+
+        function returnToStart() {
+            pauseReading();
+            document.getElementById('rsvpReader').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'none';
+            document.getElementById('authSection').style.display = 'block';
+            currentWordIndex = 0;
+            words = [];
+            currentBook = null;
+            currentBookId = null;
+            // Réinitialiser l'input file
+            document.getElementById('pdfInput').value = '';
+            // Rafraîchir la liste des livres en cours
+            displayBooksInProgress();
+        }
+
+        function showSavedBooks() {
+            const savedBooks = loadSavedBooks();
+            const bookList = document.getElementById('bookList');
+            const bookLoading = document.getElementById('bookLoading');
+            
+            bookLoading.style.display = 'none';
+            
+            if (savedBooks.length === 0) {
+                bookList.innerHTML = '<div class="info">Aucun livre sauvegardé. Importez un PDF pour commencer.</div>';
+                return;
+            }
+            
+            bookList.innerHTML = '';
+            
+            savedBooks.forEach((book) => {
+                const bookDiv = document.createElement('div');
+                bookDiv.className = 'book-item';
+                bookDiv.onclick = () => loadSavedBook(book.id);
+                
+                const progress = loadProgress(book.id);
+                const progressText = progress ? `${Math.round(progress.wordIndex / progress.totalWords * 100)}% lu` : 'Non commencé';
+                
+                bookDiv.innerHTML = `
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='200'%3E%3Crect fill='%23667eea' width='128' height='200'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='white' font-size='16' font-weight='bold'%3EPDF%3C/text%3E%3C/svg%3E" class="book-cover">
+                    <div class="book-title">${book.title}</div>
+                    <div class="book-author">${book.author}</div>
+                    <div style="font-size: 12px; color: #667eea; margin-top: 5px; font-weight: 600;">${progressText}</div>
+                `;
+                
+                bookList.appendChild(bookDiv);
+            });
+        }
+
+        async function loadSavedBook(bookId) {
+            const bookData = loadBookData(bookId);
+            if (!bookData) {
+                alert('Erreur : livre introuvable');
+                return;
+            }
+            
+            currentBookId = bookId;
+            words = bookData.words;
+            currentBook = {
+                volumeInfo: {
+                    title: bookData.title,
+                    authors: [bookData.author]
+                }
+            };
+            
+            // Charger la progression
+            const savedProgress = loadProgress(bookId);
+            if (savedProgress && savedProgress.totalWords === words.length) {
+                const resume = confirm(`Progression : ${savedProgress.wordIndex} / ${savedProgress.totalWords} mots (${Math.round(savedProgress.wordIndex / savedProgress.totalWords * 100)}%). Reprendre ?`);
+                if (resume) {
+                    currentWordIndex = savedProgress.wordIndex;
+                } else {
+                    currentWordIndex = 0;
+                }
+            } else {
+                currentWordIndex = 0;
+            }
+            
+            // Afficher le lecteur
+            document.getElementById('bookSelector').style.display = 'none';
+            document.getElementById('rsvpReader').style.display = 'block';
+            updateProgress();
+            displayWord('<span style="color: #ffffff;">Prêt à commencer</span>', true);
+        }
+
+        function showGoogleBooks() {
+            document.getElementById('bookLoading').style.display = 'block';
+            document.getElementById('bookList').innerHTML = '';
+            if (accessToken) {
+                loadBooks();
+            } else {
+                document.getElementById('bookLoading').innerHTML = '<div class="info">Veuillez d\'abord vous connecter avec Google.</div>';
+            }
+        }
+    </script>
+</body>
+</html>
