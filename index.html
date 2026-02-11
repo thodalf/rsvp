@@ -543,22 +543,39 @@
         <div class="auth-section" id="authSection">
             <div id="booksInProgress" style="margin-bottom: 30px;"></div>
             
-            <p style="margin-bottom: 20px; color: #666;">Connectez-vous avec votre compte Google pour accéder à vos livres</p>
-            <button onclick="handleSignIn()">Se connecter avec Google</button>
+            <h3 style="color: #333; margin-bottom: 20px;">Choisir un livre</h3>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-bottom: 30px;">
+                <button onclick="showProjectGutenberg(); document.getElementById('authSection').style.display='none'; document.getElementById('mainContent').style.display='block';" 
+                        style="background: #e74c3c; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
+                    📖 Project Gutenberg
+                </button>
+                <button onclick="document.getElementById('pdfInput').click()" 
+                        style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
+                    📄 Importer un PDF
+                </button>
+                <button onclick="showAnnasArchiveHome()" 
+                        style="background: #16a085; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
+                    🏛️ Anna's Archive
+                </button>
+            </div>
             
             <div style="margin: 30px 0; color: #999; font-weight: 600;">OU</div>
             
-            <p style="margin-bottom: 15px; color: #666;">Importez votre propre PDF</p>
+            <p style="margin-bottom: 20px; color: #666;">Connectez-vous avec votre compte Google pour accéder à vos livres</p>
+            <button onclick="handleSignIn()">Se connecter avec Google</button>
+            
             <input type="file" id="pdfInput" accept=".pdf" style="display: none;" onchange="handlePdfUpload(event)">
-            <button onclick="document.getElementById('pdfInput').click()" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">📄 Importer un PDF</button>
         </div>
 
         <div class="main-content" id="mainContent">
             <div class="book-selector" id="bookSelector">
                 <h2>Sélectionnez un livre</h2>
-                <div style="margin-bottom: 20px;">
-                    <button onclick="showSavedBooks()" style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">📚 Mes livres sauvegardés</button>
-                    <button onclick="showGoogleBooks()" style="background: #764ba2; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600; margin-left: 10px;">☁️ Google Books</button>
+                <div style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+                    <button onclick="showSavedBooks()" style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">📚 Mes livres</button>
+                    <button onclick="showGoogleBooks()" style="background: #764ba2; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">☁️ Google Books</button>
+                    <button onclick="showProjectGutenberg()" style="background: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">📖 Gutenberg</button>
+                    <button onclick="showAnnasArchive()" style="background: #16a085; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">🏛️ Anna's Archive</button>
                 </div>
                 <div class="loading" id="bookLoading">Chargement de vos livres...</div>
                 <div class="book-list" id="bookList"></div>
@@ -666,7 +683,7 @@
         let currentBookId = null; // ID unique pour le livre actuel
 
         // Configuration Google OAuth
-        const CLIENT_ID = '';
+        const CLIENT_ID = '698276767759-1rc9j52s42p4g13ljedjcre2spth8r8g.apps.googleusercontent.com';
         const SCOPES = 'https://www.googleapis.com/auth/books';
 
         // Afficher les livres en cours au chargement de la page
@@ -1303,6 +1320,9 @@
                     fullText += pageText + ' ';
                 }
 
+                // Nettoyage avancé du texte
+                fullText = cleanPdfText(fullText);
+                
                 // Nettoyer et découper le texte en mots
                 fullText = fullText.replace(/\s+/g, ' ').trim();
                 words = fullText.split(/\s+/).filter(word => word.length > 0);
@@ -1341,6 +1361,46 @@
                 console.error('Erreur lors de la lecture du PDF:', error);
                 document.getElementById('rsvpWord').innerHTML = '<div class="error">Erreur lors de la lecture du PDF. Assurez-vous qu\'il s\'agit d\'un PDF valide avec du texte extractible.</div>';
             }
+        }
+
+        function cleanPdfText(text) {
+            // Supprimer les numéros de page isolés (ex: "42", "Page 42", "- 42 -")
+            text = text.replace(/\b(?:Page\s+)?\d+\b/gi, '');
+            text = text.replace(/[-–—]\s*\d+\s*[-–—]/g, '');
+            
+            // Supprimer les headers/footers communs
+            text = text.replace(/\b(?:Chapitre|Chapter|CHAPITRE|CHAPTER)\s+[IVXLCDM\d]+\b/gi, '');
+            
+            // Supprimer les lignes très courtes qui sont souvent des headers (moins de 3 mots)
+            const lines = text.split('\n');
+            const cleanedLines = lines.filter(line => {
+                const words = line.trim().split(/\s+/);
+                // Garder les lignes avec au moins 3 mots ou qui contiennent de la ponctuation de dialogue
+                return words.length >= 3 || line.includes('—') || line.includes('«') || line.includes('»');
+            });
+            text = cleanedLines.join(' ');
+            
+            // Supprimer les URLs et emails
+            text = text.replace(/https?:\/\/[^\s]+/g, '');
+            text = text.replace(/[\w.-]+@[\w.-]+\.\w+/g, '');
+            
+            // Supprimer les références de type [1], [2], etc.
+            text = text.replace(/\[\d+\]/g, '');
+            
+            // Supprimer les caractères de contrôle et spéciaux inutiles
+            text = text.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+            
+            // Normaliser les guillemets et apostrophes
+            text = text.replace(/['']/g, "'");
+            text = text.replace(/[""]/g, '"');
+            
+            // Supprimer les espaces multiples et normaliser
+            text = text.replace(/\s+/g, ' ');
+            
+            // Supprimer les tirets de césure en fin de ligne (ex: "pro-gramme" → "programme")
+            text = text.replace(/(\w)-\s+(\w)/g, '$1$2');
+            
+            return text.trim();
         }
 
         function returnToStart() {
@@ -1435,6 +1495,141 @@
             } else {
                 document.getElementById('bookLoading').innerHTML = '<div class="info">Veuillez d\'abord vous connecter avec Google.</div>';
             }
+        }
+
+        async function showProjectGutenberg() {
+            document.getElementById('bookLoading').style.display = 'block';
+            document.getElementById('bookList').innerHTML = '';
+            document.getElementById('bookLoading').innerHTML = '<div style="padding: 20px;">Chargement du catalogue Project Gutenberg...</div>';
+
+            try {
+                // Récupérer les livres populaires de Project Gutenberg
+                const response = await fetch('https://gutendex.com/books/?sort=popular&languages=fr,en');
+                const data = await response.json();
+                
+                document.getElementById('bookLoading').style.display = 'none';
+                
+                if (!data.results || data.results.length === 0) {
+                    document.getElementById('bookList').innerHTML = '<div class="info">Aucun livre trouvé.</div>';
+                    return;
+                }
+
+                displayGutenbergBooks(data.results);
+            } catch (error) {
+                console.error('Erreur Project Gutenberg:', error);
+                document.getElementById('bookLoading').innerHTML = '<div class="error">Erreur lors du chargement du catalogue Project Gutenberg.</div>';
+            }
+        }
+
+        function displayGutenbergBooks(books) {
+            const bookList = document.getElementById('bookList');
+            bookList.innerHTML = '';
+
+            books.forEach((book) => {
+                const bookDiv = document.createElement('div');
+                bookDiv.className = 'book-item';
+                
+                const thumbnail = book.formats['image/jpeg'] || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="200"%3E%3Crect fill="%23e74c3c" width="128" height="200"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" fill="white" font-size="14"%3EGutenberg%3C/text%3E%3C/svg%3E';
+                
+                const authors = book.authors.map(a => a.name).join(', ') || 'Auteur inconnu';
+                
+                bookDiv.innerHTML = `
+                    <img src="${thumbnail}" alt="${book.title}" class="book-cover">
+                    <div class="book-title">${book.title}</div>
+                    <div class="book-author">${authors}</div>
+                `;
+                
+                bookDiv.onclick = () => downloadGutenbergBook(book);
+                bookList.appendChild(bookDiv);
+            });
+        }
+
+        async function downloadGutenbergBook(book) {
+            try {
+                // Chercher un format texte (préférence : txt, sinon html)
+                const txtUrl = book.formats['text/plain; charset=utf-8'] || 
+                               book.formats['text/plain'] || 
+                               book.formats['text/html'];
+                
+                if (!txtUrl) {
+                    alert('Aucun format texte disponible pour ce livre.');
+                    return;
+                }
+
+                document.getElementById('bookLoading').style.display = 'block';
+                document.getElementById('bookLoading').innerHTML = '<div style="padding: 20px;">Téléchargement du livre...</div>';
+
+                const response = await fetch(txtUrl);
+                let text = await response.text();
+                
+                // Nettoyer le texte (enlever le header/footer de Gutenberg)
+                text = text.replace(/^\*\*\* START OF .+? \*\*\*/s, '');
+                text = text.replace(/\*\*\* END OF .+? \*\*\*$/s, '');
+                text = text.replace(/<[^>]*>/g, ''); // Enlever les balises HTML si présentes
+                text = text.trim();
+
+                // Préparer pour la lecture
+                words = text.split(/\s+/).filter(word => word.length > 0);
+                
+                currentBookId = `gutenberg_${book.id}_${Date.now()}`;
+                currentBook = {
+                    volumeInfo: {
+                        title: book.title,
+                        authors: book.authors.map(a => a.name)
+                    }
+                };
+
+                // Sauvegarder le livre
+                saveBookData(currentBookId, book.title, book.authors.map(a => a.name).join(', '), words);
+
+                currentWordIndex = 0;
+                
+                // Afficher le lecteur
+                document.getElementById('bookSelector').style.display = 'none';
+                document.getElementById('rsvpReader').style.display = 'block';
+                document.getElementById('bookLoading').style.display = 'none';
+                
+                updateProgress();
+                displayWord('<span style="color: #ffffff;">Prêt à commencer</span>', true);
+                
+            } catch (error) {
+                console.error('Erreur téléchargement:', error);
+                alert('Erreur lors du téléchargement du livre.');
+                document.getElementById('bookLoading').style.display = 'none';
+            }
+        }
+
+        function showAnnasArchive() {
+            document.getElementById('bookLoading').style.display = 'none';
+            const bookList = document.getElementById('bookList');
+            
+            bookList.innerHTML = `
+                <div class="info" style="padding: 30px; text-align: center;">
+                    <h3 style="margin-bottom: 15px; color: #16a085;">🏛️ Anna's Archive</h3>
+                    <p style="margin-bottom: 20px; line-height: 1.6;">
+                        Anna's Archive est une bibliothèque numérique contenant des millions de livres gratuits.
+                        Pour utiliser cette fonctionnalité :
+                    </p>
+                    <ol style="text-align: left; max-width: 500px; margin: 0 auto 20px; line-height: 1.8;">
+                        <li>Rendez-vous sur <a href="https://annas-archive.org" target="_blank" style="color: #16a085; font-weight: 600;">annas-archive.org</a></li>
+                        <li>Recherchez et téléchargez un livre au format <strong>PDF</strong> ou <strong>TXT</strong></li>
+                        <li>Revenez ici et cliquez sur "📄 Importer un PDF" sur la page d'accueil</li>
+                        <li>Sélectionnez le fichier téléchargé</li>
+                    </ol>
+                    <button onclick="window.open('https://annas-archive.org', '_blank')" 
+                            style="background: #16a085; color: white; border: none; padding: 12px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 16px; margin-top: 10px;">
+                        Ouvrir Anna's Archive
+                    </button>
+                </div>
+            `;
+        }
+
+        function showAnnasArchiveHome() {
+            // Ouvrir directement le site dans un nouvel onglet
+            window.open('https://annas-archive.org', '_blank');
+            
+            // Afficher une notification
+            alert('📖 Anna\'s Archive s\'ouvre dans un nouvel onglet.\n\n1. Recherchez un livre\n2. Téléchargez-le au format PDF\n3. Revenez ici et cliquez sur "📄 Importer un PDF"');
         }
     </script>
 </body>
