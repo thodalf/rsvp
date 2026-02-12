@@ -693,6 +693,14 @@
                         <input type="number" id="pauseProperNounDuration" min="0.5" max="5" step="0.1" value="1.8" onchange="updateSettings()" style="width: 50px; padding: 3px; border-radius: 5px; border: 1px solid #ccc; font-size: 12px;">
                         <span style="font-size: 12px; color: #666;">×</span>
                     </div>
+
+                    <div class="speed-control compact checkbox-control">
+                        <label>
+                            <input type="checkbox" id="ambientMusicCheck" onchange="updateSettings()">
+                            🎵 Musique d'ambiance
+                        </label>
+                        <span class="speed-value" id="musicStatus" style="font-size: 11px; min-width: 80px;">Désactivée</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -724,6 +732,11 @@
         let maxWordLength = 12;
         let wordStartTime = 0;
         let currentBookId = null; // ID unique pour le livre actuel
+        let ambientMusicEnabled = false;
+        let currentAudio = null;
+        let currentMusicContext = null;
+        let lastContextAnalysis = 0;
+        let contextAnalysisInterval = 50; // Analyser le contexte tous les 50 mots
 
         // Charger les paramètres globaux au démarrage
         window.addEventListener('DOMContentLoaded', () => {
@@ -739,7 +752,8 @@
                 pauseOnPunctuation: pauseOnPunctuation,
                 pauseOnProperNoun: pauseOnProperNoun,
                 pausePunctuationMultiplier: pausePunctuationMultiplier,
-                pauseProperNounMultiplier: pauseProperNounMultiplier
+                pauseProperNounMultiplier: pauseProperNounMultiplier,
+                ambientMusicEnabled: ambientMusicEnabled
             };
             
             localStorage.setItem('rsvp_global_settings', JSON.stringify(settings));
@@ -760,6 +774,7 @@
                 pauseOnProperNoun = settings.pauseOnProperNoun !== undefined ? settings.pauseOnProperNoun : true;
                 pausePunctuationMultiplier = settings.pausePunctuationMultiplier || 2.5;
                 pauseProperNounMultiplier = settings.pauseProperNounMultiplier || 1.8;
+                ambientMusicEnabled = settings.ambientMusicEnabled || false;
                 
                 // Mettre à jour l'interface
                 document.getElementById('wpmSlider').value = baseWpm;
@@ -772,6 +787,7 @@
                 document.getElementById('pauseProperNounCheck').checked = pauseOnProperNoun;
                 document.getElementById('pausePunctuationDuration').value = pausePunctuationMultiplier;
                 document.getElementById('pauseProperNounDuration').value = pauseProperNounMultiplier;
+                document.getElementById('ambientMusicCheck').checked = ambientMusicEnabled;
                 
                 console.log('📖 Paramètres globaux chargés:', settings);
             }
@@ -956,6 +972,173 @@
                 localStorage.setItem(`rsvp_book_${bookId}`, JSON.stringify(bookData));
                 console.log('✅ Livre réinitialisé avec', bookData.words.length, 'mots');
             }
+        }
+
+        // Système de musique d'ambiance contextuelle
+        const musicLibrary = {
+            calm: 'https://cdn.pixabay.com/audio/2022/03/10/audio_4a5e8a83eb.mp3', // Piano calme
+            tense: 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3', // Suspense
+            adventure: 'https://cdn.pixabay.com/audio/2022/03/15/audio_c8ec009906.mp3', // Aventure
+            romantic: 'https://cdn.pixabay.com/audio/2022/11/22/audio_31fc72781c.mp3', // Romantique
+            mysterious: 'https://cdn.pixabay.com/audio/2021/08/04/audio_12b0c7443c.mp3', // Mystérieux
+        };
+
+        function analyzeContext() {
+            if (!ambientMusicEnabled || !words || words.length === 0) return null;
+            
+            // Analyser les 100 mots autour de la position actuelle
+            const contextStart = Math.max(0, currentWordIndex - 50);
+            const contextEnd = Math.min(words.length, currentWordIndex + 50);
+            const contextWords = words.slice(contextStart, contextEnd).join(' ').toLowerCase();
+            
+            // Mots-clés pour différents contextes
+            const keywords = {
+                calm: ['paisible', 'calme', 'tranquille', 'serein', 'doux', 'peaceful', 'calm', 'quiet', 'gentle', 'soft', 'repos', 'silence'],
+                tense: ['danger', 'peur', 'terreur', 'angoisse', 'menace', 'fear', 'terror', 'threat', 'danger', 'scared', 'horrible', 'mort', 'death'],
+                adventure: ['aventure', 'exploration', 'voyage', 'découverte', 'quest', 'adventure', 'journey', 'discover', 'explore', 'expédition'],
+                romantic: ['amour', 'cœur', 'baiser', 'tendresse', 'amant', 'love', 'heart', 'kiss', 'romance', 'beloved', 'passion'],
+                mysterious: ['mystère', 'énigme', 'secret', 'étrange', 'mystery', 'enigma', 'strange', 'weird', 'unknown', 'caché', 'ombre']
+            };
+            
+            // Compter les occurrences de chaque catégorie
+            const scores = {};
+            for (const [context, words] of Object.entries(keywords)) {
+                scores[context] = 0;
+                words.forEach(keyword => {
+                    const regex = new RegExp(`\\b${keyword}\\w*\\b`, 'gi');
+                    const matches = contextWords.match(regex);
+                    if (matches) scores[context] += matches.length;
+                });
+            }
+            
+            // Trouver le contexte dominant
+            let maxScore = 0;
+            let dominantContext = null;
+            for (const [context, score] of Object.entries(scores)) {
+                if (score > maxScore) {
+                    maxScore = score;
+                    dominantContext = context;
+                }
+            }
+            
+            // Ne retourner un contexte que s'il y a au moins 2 mots-clés correspondants
+            if (maxScore >= 2) {
+                console.log('🎵 Contexte détecté:', dominantContext, 'Score:', maxScore);
+                return dominantContext;
+            }
+            
+            return null;
+        }
+
+        function updateAmbientMusic() {
+            if (!ambientMusicEnabled) {
+                stopAmbientMusic();
+                return;
+            }
+            
+            // Analyser le contexte tous les X mots
+            if (currentWordIndex - lastContextAnalysis >= contextAnalysisInterval) {
+                lastContextAnalysis = currentWordIndex;
+                
+                const newContext = analyzeContext();
+                
+                // Changer la musique si le contexte a changé
+                if (newContext && newContext !== currentMusicContext && musicLibrary[newContext]) {
+                    playAmbientMusic(newContext);
+                }
+            }
+        }
+
+        function playAmbientMusic(context) {
+            console.log('🎵 Démarrage musique:', context);
+            
+            // Arrêter la musique actuelle
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            
+            currentMusicContext = context;
+            
+            // Créer et configurer le nouvel audio
+            currentAudio = new Audio(musicLibrary[context]);
+            currentAudio.loop = true;
+            currentAudio.volume = 0.15; // Volume faible pour rester discret
+            
+            // Démarrer avec un fade-in
+            currentAudio.volume = 0;
+            currentAudio.play().then(() => {
+                fadeIn(currentAudio, 0.15, 2000); // Fade-in sur 2 secondes
+            }).catch(err => {
+                console.log('Erreur lecture audio:', err);
+            });
+            
+            // Mettre à jour le statut
+            updateMusicStatus(context);
+        }
+
+        function fadeIn(audio, targetVolume, duration) {
+            const steps = 20;
+            const stepDuration = duration / steps;
+            const volumeIncrement = targetVolume / steps;
+            let currentStep = 0;
+            
+            const interval = setInterval(() => {
+                if (currentStep >= steps || !audio) {
+                    clearInterval(interval);
+                    if (audio) audio.volume = targetVolume;
+                    return;
+                }
+                audio.volume = Math.min(volumeIncrement * currentStep, targetVolume);
+                currentStep++;
+            }, stepDuration);
+        }
+
+        function fadeOut(audio, duration, callback) {
+            const steps = 20;
+            const stepDuration = duration / steps;
+            const startVolume = audio.volume;
+            const volumeDecrement = startVolume / steps;
+            let currentStep = 0;
+            
+            const interval = setInterval(() => {
+                if (currentStep >= steps || !audio) {
+                    clearInterval(interval);
+                    if (callback) callback();
+                    return;
+                }
+                audio.volume = Math.max(startVolume - (volumeDecrement * currentStep), 0);
+                currentStep++;
+            }, stepDuration);
+        }
+
+        function stopAmbientMusic() {
+            if (currentAudio) {
+                fadeOut(currentAudio, 1000, () => {
+                    if (currentAudio) {
+                        currentAudio.pause();
+                        currentAudio = null;
+                    }
+                });
+            }
+            currentMusicContext = null;
+            updateMusicStatus('off');
+        }
+
+        function updateMusicStatus(status) {
+            const statusElement = document.getElementById('musicStatus');
+            if (!statusElement) return;
+            
+            const statusTexts = {
+                calm: '🎹 Calme',
+                tense: '🎻 Tension',
+                adventure: '🎺 Aventure',
+                romantic: '🎵 Romance',
+                mysterious: '🎼 Mystère',
+                off: 'Désactivée'
+            };
+            
+            statusElement.textContent = statusTexts[status] || 'En attente...';
         }
 
         function saveBookData(bookId, title, author, wordsArray) {
@@ -1173,7 +1356,7 @@
             pauseProperNounMultiplier = parseFloat(document.getElementById('pauseProperNounDuration').value);
             
             // Vérifier si on doit faire une pause après ponctuation
-            if (pauseOnPunctuation && /[.!?;:]$/.test(word)) {
+            if (pauseOnPunctuation && /[.!?;:,]$/.test(word)) {
                 delay = baseDelay * pausePunctuationMultiplier;
             }
             
@@ -1192,6 +1375,9 @@
             if (currentWordIndex % 10 === 0) {
                 saveProgress();
             }
+            
+            // Mettre à jour la musique d'ambiance
+            updateAmbientMusic();
             
             // Accélération progressive
             if (autoSpeedEnabled && currentWordIndex % 50 === 0) {
@@ -1323,6 +1509,9 @@
             isPlaying = false;
             document.getElementById('playBtn').disabled = false;
             document.getElementById('pauseBtn').disabled = true;
+            
+            // Arrêter la musique d'ambiance
+            stopAmbientMusic();
         }
 
         function resetReading() {
@@ -1357,6 +1546,15 @@
             pauseOnProperNoun = document.getElementById('pauseProperNounCheck').checked;
             pausePunctuationMultiplier = parseFloat(document.getElementById('pausePunctuationDuration').value);
             pauseProperNounMultiplier = parseFloat(document.getElementById('pauseProperNounDuration').value);
+            
+            const newMusicSetting = document.getElementById('ambientMusicCheck').checked;
+            
+            // Si on désactive la musique
+            if (!newMusicSetting && ambientMusicEnabled) {
+                stopAmbientMusic();
+            }
+            
+            ambientMusicEnabled = newMusicSetting;
             
             saveGlobalSettings();
         }
