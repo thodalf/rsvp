@@ -981,6 +981,10 @@
             adventure: 'https://cdn.pixabay.com/audio/2022/03/15/audio_c8ec009906.mp3', // Aventure
             romantic: 'https://cdn.pixabay.com/audio/2022/11/22/audio_31fc72781c.mp3', // Romantique
             mysterious: 'https://cdn.pixabay.com/audio/2021/08/04/audio_12b0c7443c.mp3', // Mystérieux
+            sad: 'https://cdn.pixabay.com/audio/2022/08/02/audio_33c0dbb5d0.mp3', // Triste/mélancolique
+            epic: 'https://cdn.pixabay.com/audio/2022/03/23/audio_b124920804.mp3', // Épique
+            upbeat: 'https://cdn.pixabay.com/audio/2022/03/24/audio_14f6d9f4ff.mp3', // Joyeux/entraînant
+            dark: 'https://cdn.pixabay.com/audio/2022/10/25/audio_24593b6248.mp3', // Sombre/inquiétant
         };
 
         function analyzeContext() {
@@ -991,13 +995,100 @@
             const contextEnd = Math.min(words.length, currentWordIndex + 50);
             const contextWords = words.slice(contextStart, contextEnd).join(' ').toLowerCase();
             
-            // Mots-clés pour différents contextes
+            // Mots-clés pour différents contextes (ENRICHIS)
             const keywords = {
-                calm: ['paisible', 'calme', 'tranquille', 'serein', 'doux', 'peaceful', 'calm', 'quiet', 'gentle', 'soft', 'repos', 'silence'],
-                tense: ['danger', 'peur', 'terreur', 'angoisse', 'menace', 'fear', 'terror', 'threat', 'danger', 'scared', 'horrible', 'mort', 'death'],
-                adventure: ['aventure', 'exploration', 'voyage', 'découverte', 'quest', 'adventure', 'journey', 'discover', 'explore', 'expédition'],
-                romantic: ['amour', 'cœur', 'baiser', 'tendresse', 'amant', 'love', 'heart', 'kiss', 'romance', 'beloved', 'passion'],
-                mysterious: ['mystère', 'énigme', 'secret', 'étrange', 'mystery', 'enigma', 'strange', 'weird', 'unknown', 'caché', 'ombre']
+                calm: [
+                    // Français
+                    'paisible', 'calme', 'tranquille', 'serein', 'doux', 'silence', 'repos', 'détente', 'relaxant', 
+                    'apaisant', 'harmonie', 'zen', 'méditation', 'contemplation', 'sérénité', 'quiétude',
+                    'paix', 'pacifique', 'reposant', 'silencieux', 'endormi', 'sommeil', 'rêve', 'nuage',
+                    // Anglais
+                    'peaceful', 'calm', 'quiet', 'gentle', 'soft', 'rest', 'relax', 'serene', 'tranquil',
+                    'silence', 'peace', 'sleep', 'dream', 'cloud', 'breeze', 'still'
+                ],
+                tense: [
+                    // Français
+                    'danger', 'peur', 'terreur', 'angoisse', 'menace', 'horrible', 'mort', 'sang', 'cri',
+                    'effroi', 'épouvante', 'frayeur', 'anxiété', 'stress', 'tension', 'nerveux', 'alerte',
+                    'urgence', 'risque', 'péril', 'catastrophe', 'désastre', 'tragédie', 'accident',
+                    'courir', 'fuir', 'échapper', 'sauver', 'survie', 'piège', 'attaque', 'combat',
+                    // Anglais
+                    'fear', 'terror', 'threat', 'danger', 'scared', 'death', 'blood', 'scream',
+                    'panic', 'horror', 'anxiety', 'stress', 'urgent', 'escape', 'run', 'chase', 'attack'
+                ],
+                adventure: [
+                    // Français
+                    'aventure', 'exploration', 'voyage', 'découverte', 'quête', 'expédition', 'parcourir',
+                    'explorer', 'chercher', 'trouver', 'carte', 'trésor', 'mission', 'route', 'chemin',
+                    'destination', 'horizon', 'lointain', 'inconnu', 'nouveau', 'monde', 'terre',
+                    'mer', 'océan', 'montagne', 'forêt', 'jungle', 'désert', 'caverne', 'île',
+                    // Anglais
+                    'adventure', 'quest', 'journey', 'discover', 'explore', 'expedition', 'travel',
+                    'map', 'treasure', 'mission', 'road', 'path', 'world', 'land', 'sea', 'mountain'
+                ],
+                romantic: [
+                    // Français
+                    'amour', 'cœur', 'baiser', 'tendresse', 'amant', 'passion', 'désir', 'amoureux',
+                    'romantique', 'caresse', 'étreinte', 'embrasser', 'séduire', 'charme', 'beauté',
+                    'couple', 'mariage', 'fiancé', 'époux', 'bien-aimé', 'chéri', 'adoré', 'doux',
+                    'regard', 'sourire', 'main', 'ensemble', 'sentiment', 'émotion', 'sensible',
+                    // Anglais
+                    'love', 'heart', 'kiss', 'romance', 'beloved', 'passion', 'desire', 'lover',
+                    'sweet', 'tender', 'embrace', 'charm', 'beauty', 'couple', 'together', 'feelings'
+                ],
+                mysterious: [
+                    // Français
+                    'mystère', 'énigme', 'secret', 'étrange', 'caché', 'ombre', 'obscur', 'inconnu',
+                    'mystérieux', 'puzzle', 'indice', 'clé', 'code', 'déchiffrer', 'résoudre',
+                    'enquête', 'investigation', 'suspect', 'coupable', 'crime', 'détective',
+                    'bizarre', 'inhabituel', 'curieux', 'inexplicable', 'paranormal', 'surnaturel',
+                    // Anglais
+                    'mystery', 'enigma', 'strange', 'weird', 'unknown', 'hidden', 'shadow', 'dark',
+                    'secret', 'clue', 'puzzle', 'solve', 'investigate', 'detective', 'crime', 'suspect'
+                ],
+                sad: [
+                    // Français
+                    'triste', 'tristesse', 'mélancolie', 'chagrin', 'peine', 'douleur', 'souffrance',
+                    'larme', 'pleurer', 'sanglot', 'désespoir', 'désespéré', 'malheur', 'malheureux',
+                    'seul', 'solitude', 'abandonné', 'perdu', 'vide', 'nostalgie', 'regret',
+                    'deuil', 'perdre', 'adieu', 'partir', 'séparation', 'absence', 'manque',
+                    // Anglais
+                    'sad', 'sadness', 'sorrow', 'grief', 'pain', 'suffer', 'tear', 'cry', 'weep',
+                    'despair', 'lonely', 'alone', 'lost', 'empty', 'miss', 'goodbye', 'farewell'
+                ],
+                epic: [
+                    // Français
+                    'héros', 'héroïque', 'gloire', 'victoire', 'triomphe', 'conquête', 'bataille',
+                    'guerre', 'armée', 'soldat', 'guerrier', 'champion', 'légende', 'épique',
+                    'courage', 'bravoure', 'vaillance', 'honneur', 'noble', 'grand', 'puissant',
+                    'empire', 'royaume', 'roi', 'reine', 'pouvoir', 'destin', 'prophétie',
+                    // Anglais
+                    'hero', 'heroic', 'glory', 'victory', 'triumph', 'conquest', 'battle', 'war',
+                    'army', 'soldier', 'warrior', 'champion', 'legend', 'epic', 'courage', 'brave',
+                    'empire', 'kingdom', 'king', 'queen', 'power', 'destiny', 'prophecy'
+                ],
+                upbeat: [
+                    // Français
+                    'joie', 'joyeux', 'heureux', 'bonheur', 'rire', 'sourire', 'content', 'gai',
+                    'amusant', 'drôle', 'humour', 'plaisanter', 'rigoler', 'fête', 'célébration',
+                    'danse', 'danser', 'chanter', 'musique', 'rythme', 'énergie', 'vivant',
+                    'excité', 'enthousiasme', 'optimiste', 'positif', 'lumière', 'soleil', 'brillant',
+                    // Anglais
+                    'joy', 'happy', 'happiness', 'laugh', 'smile', 'cheerful', 'fun', 'funny',
+                    'humor', 'party', 'celebration', 'dance', 'sing', 'music', 'energy', 'excited',
+                    'bright', 'sunny', 'light', 'positive'
+                ],
+                dark: [
+                    // Français
+                    'sombre', 'noir', 'ténèbres', 'obscurité', 'nuit', 'ombre', 'sinistre', 'macabre',
+                    'maléfique', 'mal', 'démon', 'diable', 'enfer', 'cauchemar', 'horreur',
+                    'malédiction', 'maudit', 'damné', 'corruption', 'vice', 'cruel', 'cruauté',
+                    'torture', 'souffrir', 'agonie', 'vengeance', 'haine', 'rage', 'colère',
+                    // Anglais
+                    'dark', 'darkness', 'shadow', 'night', 'sinister', 'evil', 'demon', 'devil',
+                    'hell', 'nightmare', 'horror', 'curse', 'cursed', 'damned', 'corrupt', 'cruel',
+                    'torture', 'agony', 'revenge', 'hate', 'rage', 'anger', 'wrath'
+                ]
             };
             
             // Compter les occurrences de chaque catégorie
@@ -1135,6 +1226,10 @@
                 adventure: '🎺 Aventure',
                 romantic: '🎵 Romance',
                 mysterious: '🎼 Mystère',
+                sad: '🎭 Tristesse',
+                epic: '⚔️ Épique',
+                upbeat: '🎉 Joyeux',
+                dark: '🌑 Sombre',
                 off: 'Désactivée'
             };
             
@@ -1320,29 +1415,71 @@
             }
 
             let word = words[currentWordIndex];
-            let originalWord = word;
             
-            // Couper les mots trop longs selon le paramètre
-            if (word.length > maxWordLength) {
-                // Calculer le point de coupure pour avoir des parties équilibrées
-                let cutPoint = Math.floor(word.length / 2);
+            // ÉTAPE 1: Séparer par les tirets si le mot en contient
+            if (word.includes('-') && !word.startsWith('-') && !word.endsWith('-')) {
+                const parts = word.split('-').filter(p => p.length > 0);
                 
-                // S'assurer qu'aucune partie ne fait moins de 3 caractères
-                if (cutPoint < 3) {
-                    cutPoint = 3;
-                } else if (word.length - cutPoint < 3) {
-                    cutPoint = word.length - 3;
+                // Si on a plusieurs parties valides
+                if (parts.length > 1) {
+                    const wordsToInsert = [];
+                    for (let i = 0; i < parts.length; i++) {
+                        // Ajouter le tiret à toutes les parties sauf la dernière
+                        if (i < parts.length - 1) {
+                            wordsToInsert.push(parts[i] + '-');
+                        } else {
+                            wordsToInsert.push(parts[i]);
+                        }
+                    }
+                    // Remplacer le mot actuel par toutes les parties
+                    words.splice(currentWordIndex, 1, ...wordsToInsert);
+                    word = words[currentWordIndex];
                 }
+            }
+            
+            // ÉTAPE 2: Fractionner les mots trop longs (après séparation par tirets)
+            // Nettoyer le mot des tirets de fin pour vérifier la longueur réelle
+            const cleanWord = word.endsWith('-') ? word.slice(0, -1) : word;
+            const hasDashAtEnd = word.endsWith('-');
+            
+            if (cleanWord.length > maxWordLength) {
+                // Vérifier si le mot peut être fractionné avec minimum 3 caractères par partie
+                const minPartLength = 3;
                 
-                let firstPart = word.substring(0, cutPoint) + '-';
-                let secondPart = word.substring(cutPoint);
-                
-                // Vérifier que la deuxième partie n'est pas trop courte
-                if (secondPart.length >= 3) {
-                    words.splice(currentWordIndex + 1, 0, secondPart);
-                    word = firstPart;
+                if (cleanWord.length >= (minPartLength * 2)) {
+                    // Calculer le meilleur point de coupure
+                    let cutPoint = Math.floor(cleanWord.length / 2);
+                    
+                    // Ajuster pour respecter le minimum de 3 caractères
+                    if (cutPoint < minPartLength) {
+                        cutPoint = minPartLength;
+                    }
+                    if (cleanWord.length - cutPoint < minPartLength) {
+                        cutPoint = cleanWord.length - minPartLength;
+                    }
+                    
+                    // Double vérification que les deux parties font au moins 3 caractères
+                    const firstPartClean = cleanWord.substring(0, cutPoint);
+                    const secondPartClean = cleanWord.substring(cutPoint);
+                    
+                    if (firstPartClean.length >= minPartLength && secondPartClean.length >= minPartLength) {
+                        // Ajouter un tiret à la première partie
+                        const firstPart = firstPartClean + '-';
+                        const secondPart = hasDashAtEnd ? secondPartClean + '-' : secondPartClean;
+                        
+                        // Insérer la deuxième partie après le mot actuel
+                        words.splice(currentWordIndex + 1, 0, secondPart);
+                        word = firstPart;
+                        
+                        console.log('✂️ Mot fractionné:', cleanWord, '→', firstPartClean, '/', secondPartClean);
+                    } else {
+                        // Ne peut pas être fractionné proprement, garder le mot entier
+                        console.log('⚠️ Mot trop court pour fractionnement:', cleanWord);
+                    }
+                } else {
+                    // Mot trop court pour être fractionné (< 6 caractères), garder entier
+                    console.log('ℹ️ Mot conservé entier:', cleanWord);
                 }
-                // Sinon, on garde le mot entier même s'il est long
             }
             
             displayWord(word, false);
