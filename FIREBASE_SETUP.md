@@ -6,11 +6,13 @@ lecture. Tant que Firebase n'est pas configuré, l'app continue de fonctionner
 normalement en local (`localStorage`) — seule la connexion/synchronisation
 est indisponible.
 
-Dès qu'un livre est ouvert (import PDF, Project Gutenberg, Google Books, ou
-reprise d'un livre déjà sauvegardé), il est converti en PDF puis envoyé dans
-Firebase Storage pour le compte connecté. C'est ce PDF qui sert de source de
-vérité cloud : sur un nouvel appareil, il est retéléchargé et son texte
-ré-extrait automatiquement.
+Seuls **Authentication** et **Firestore** sont utilisés (plan gratuit
+Spark) : pas de Firebase Storage, qui nécessite désormais le plan payant
+Blaze. Dès qu'un livre est ouvert (import PDF, Project Gutenberg, Google
+Books, ou reprise d'un livre déjà sauvegardé), il est converti en PDF puis
+enregistré directement en blob dans Firestore pour le compte connecté. C'est
+ce PDF qui sert de source de vérité cloud : sur un nouvel appareil, il est
+récupéré et son texte ré-extrait automatiquement.
 
 ## 1. Créer le projet Firebase
 
@@ -35,6 +37,9 @@ const firebaseConfig = {
   appId: "1:123456789:web:abcdef123456"
 };
 ```
+
+(Le champ `storageBucket` n'est pas utilisé par l'app mais peut rester dans
+la config, il est sans effet.)
 
 ## 3. Renseigner la config — recommandé : variables d'environnement Netlify
 
@@ -72,10 +77,7 @@ puis servez `dist/index.html` (ex. `npx serve dist`).
 
 **Alternative** (GitHub Pages, Netlify Drop, hébergement statique sans
 build) : ouvrez `index.html`, cherchez le bloc `<script type="module">` et
-remplacez directement les valeurs `"__FIREBASE_...__"` par votre config. Dans
-ce cas, ne committez pas ces valeurs sur un dépôt public si vous préférez les
-garder privées (elles ne sont pas secrètes au sens strict — voir la note sur
-les règles de sécurité ci-dessous — mais autant garder l'habitude).
+remplacez directement les valeurs `"__FIREBASE_...__"` par votre config.
 
 ## 4. Activer l'authentification
 
@@ -94,8 +96,10 @@ dans **Settings > Authorized domains**.
 
 - Choisissez le mode **Production**
 - Sélectionnez une région proche de vos utilisateurs
+- Reste sur le plan **Spark (gratuit)** : Firestore fonctionne sans passer
+  au plan payant Blaze, contrairement à Storage
 
-### Règles de sécurité Firestore
+### Règles de sécurité
 
 Remplacez les règles par défaut (**Firestore > Règles**) par celles-ci, pour
 que chaque utilisateur ne puisse lire/écrire que ses propres données :
@@ -111,57 +115,36 @@ service cloud.firestore {
 }
 ```
 
-## 6. Activer Firebase Storage (stockage des PDF)
-
-**Build > Storage > Get started**, choisissez le mode production et la même
-région que Firestore.
-
-### Règles de sécurité Storage
-
-**Storage > Règles** :
+## 6. Structure des données
 
 ```
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
-
-⚠️ Note Firebase : `getDownloadURL()` génère une URL contenant un jeton
-d'accès qui reste valide indépendamment de ces règles (comportement standard
-de Firebase Storage — un lien "toute personne qui a l'URL peut lire"). Ne
-partagez pas les liens `pdfUrl` stockés dans Firestore si vos livres sont
-sensibles.
-
-## 7. Structure des données
-
-```
-users/{uid}/books/{bookId}       → { id, title, author, addedDate, lastModified, pdfUrl }
+users/{uid}/books/{bookId}       → { id, title, author, addedDate, lastModified, hasPdf }
+users/{uid}/bookFiles/{bookId}   → { pdfData: Bytes }   (le PDF lui-même)
 users/{uid}/progress/{bookId}    → { bookId, wordIndex, totalWords, lastUpdate }
-Storage: users/{uid}/books/{bookId}.pdf
 ```
 
-Le tableau de mots n'est plus stocké dans Firestore (risque de dépasser la
-limite de 1 Mo par document) : le PDF dans Storage fait foi, et le texte est
-ré-extrait à la volée quand un livre doit être restauré sur un nouvel
-appareil.
+Le PDF est séparé de la fiche livre (`books/{bookId}`) pour que consulter la
+liste des livres n'ait pas à retélécharger tous les PDF.
 
-## 8. Fonctionnement du mode hors-ligne / sans compte
+⚠️ Firestore limite un document à 1 Mo. Un PDF de plus de ~900 Ko n'est **pas**
+envoyé vers Firestore : le livre reste alors disponible localement sur
+l'appareil courant uniquement (`hasPdf: false`, message dans la console du
+navigateur). Pour de gros ouvrages, c'est une limite du plan gratuit — il n'y
+a pas de solution de contournement sans passer par un service de stockage de
+fichiers payant.
+
+## 7. Fonctionnement du mode hors-ligne / sans compte
 
 - Sans connexion : tout est stocké dans `localStorage` du navigateur, comme
   avant.
 - À l'ouverture d'un livre (import PDF, Gutenberg, Google Books, reprise) :
   s'il n'a encore jamais été synchronisé, il est converti en PDF (ou le PDF
-  original est réutilisé pour un import direct) et envoyé vers Firebase
-  Storage, en tâche de fond, sans bloquer la lecture.
+  original est réutilisé pour un import direct) et enregistré dans Firestore,
+  en tâche de fond, sans bloquer la lecture.
 - À la connexion : les livres présents côté cloud mais absents de cet
-  appareil sont retéléchargés et leur texte ré-extrait ; les progressions
+  appareil sont récupérés et leur texte ré-extrait ; les progressions
   distantes et locales sont fusionnées (la plus récente l'emporte) ; les
   livres locaux absents du cloud y sont poussés.
 - Ensuite, chaque sauvegarde de progression (toutes les 10 mots, fin de
   livre, retour au menu) est répercutée sur Firestore (document léger, pas de
-  nouvel upload PDF).
+  nouvel envoi du PDF).

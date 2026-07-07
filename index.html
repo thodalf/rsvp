@@ -937,10 +937,6 @@
                         style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
                     📄 Importer un PDF
                 </button>
-                <button onclick="showAnnasArchiveHome()"
-                        style="background: #16a085; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
-                    🏛️ Anna's Archive
-                </button>
             </div>
 
             <div style="margin: 30px 0; color: #999; font-weight: 600;">OU</div>
@@ -958,7 +954,6 @@
                     <button onclick="showSavedBooks()" style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">📚 Mes livres</button>
                     <button onclick="showGoogleBooks()" style="background: #764ba2; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">☁️ Google Books</button>
                     <button onclick="showProjectGutenberg()" style="background: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">📖 Gutenberg</button>
-                    <button onclick="showAnnasArchive()" style="background: #16a085; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: 600;">🏛️ Anna's Archive</button>
                 </div>
                 <div class="loading" id="bookLoading">Chargement de vos livres...</div>
                 <div class="book-list" id="bookList"></div>
@@ -1119,11 +1114,8 @@
             signOut, onAuthStateChanged
         } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
         import {
-            getFirestore, doc, setDoc, getDoc, getDocs, collection, deleteDoc
+            getFirestore, doc, setDoc, getDoc, getDocs, collection, deleteDoc, Bytes
         } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-        import {
-            getStorage, ref, uploadBytes, getDownloadURL
-        } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
         // Config Firebase : ces jetons __FIREBASE_...__ sont remplacés au build par les variables
         // d'environnement Netlify (voir build.js et FIREBASE_SETUP.md). En développement local sans
@@ -1143,14 +1135,12 @@
             const firebaseApp = initializeApp(firebaseConfig);
             const auth = getAuth(firebaseApp);
             const db = getFirestore(firebaseApp);
-            const storage = getStorage(firebaseApp);
 
             window.__firebase = {
-                auth, db, storage, GoogleAuthProvider, signInWithPopup,
+                auth, db, GoogleAuthProvider, signInWithPopup,
                 createUserWithEmailAndPassword, signInWithEmailAndPassword,
                 signOut, onAuthStateChanged,
-                doc, setDoc, getDoc, getDocs, collection, deleteDoc,
-                ref, uploadBytes, getDownloadURL
+                doc, setDoc, getDoc, getDocs, collection, deleteDoc, Bytes
             };
         } else {
             console.warn('⚠️ Firebase n\'est pas configuré : la connexion et la synchronisation cloud sont désactivées. Voir FIREBASE_SETUP.md.');
@@ -1569,7 +1559,7 @@
             fbSyncProgress(currentBookId);
         }
 
-        // ===== Synchronisation Firestore + Storage (livres convertis en PDF + progression) =====
+        // ===== Synchronisation Firestore (livres convertis en PDF + progression) =====
         // avec repli localStorage : hors connexion ou sans config Firebase, l'app ne fait rien ici
         // et continue de fonctionner normalement avec localStorage seul.
 
@@ -1587,18 +1577,28 @@
             }
         }
 
-        // Upload un PDF (Blob ou File) dans Firebase Storage, sous le compte de l'utilisateur connecté
-        async function uploadBookPdfToFirebase(bookId, pdfBlobOrFile) {
-            if (!currentUser || !window.__firebase) return null;
-            const { storage, ref, uploadBytes, getDownloadURL } = window.__firebase;
-            const storageRef = ref(storage, `users/${currentUser.uid}/books/${bookId}.pdf`);
-            await uploadBytes(storageRef, pdfBlobOrFile, { contentType: 'application/pdf' });
-            return await getDownloadURL(storageRef);
+        // Firebase Storage nécessite le plan payant (Blaze) : les PDF sont donc stockés directement
+        // en blob dans Firestore (users/{uid}/bookFiles/{bookId}), séparé du document de métadonnées
+        // léger users/{uid}/books/{bookId} pour ne pas alourdir la liste des livres à chaque lecture.
+        // Un document Firestore est limité à 1 Mo : au-delà, le PDF reste local uniquement.
+        const MAX_FIRESTORE_PDF_BYTES = 900000;
+
+        async function savePdfBytesToFirestore(bookId, uint8Array) {
+            if (!currentUser || !window.__firebase) return false;
+            if (uint8Array.byteLength > MAX_FIRESTORE_PDF_BYTES) {
+                console.warn('⚠️ PDF trop volumineux pour Firestore (', Math.round(uint8Array.byteLength / 1024), 'Ko) — conservé en local uniquement:', bookId);
+                return false;
+            }
+            const { db, doc, setDoc, Bytes } = window.__firebase;
+            await setDoc(doc(db, 'users', currentUser.uid, 'bookFiles', bookId), {
+                pdfData: Bytes.fromUint8Array(uint8Array)
+            });
+            return true;
         }
 
         // Convertit le livre ouvert en PDF (ou reprend le PDF original s'il en existe un, ex. import
-        // direct) et l'envoie vers Firebase Storage pour le compte connecté ; ne fait rien si le
-        // livre a déjà été synchronisé (appel sans risque à chaque ouverture d'un livre).
+        // direct) et l'enregistre dans Firestore pour le compte connecté ; ne fait rien si le livre
+        // a déjà été synchronisé (appel sans risque à chaque ouverture d'un livre).
         async function fbSyncBookAsPdf(bookId, originalPdfFile) {
             if (!currentUser || !window.__firebase || !bookId) return;
             const bookData = loadBookData(bookId);
@@ -1606,12 +1606,13 @@
             if (bookData.firebasePdfSyncedAt && !originalPdfFile) return;
 
             try {
-                const pdfSource = originalPdfFile || generateBookPdfBlob(
+                const pdfBlob = originalPdfFile || generateBookPdfBlob(
                     bookData.title,
                     bookData.author,
                     bookData.modifiedWords && bookData.modifiedWords.length > 0 ? bookData.modifiedWords : bookData.words
                 );
-                const pdfUrl = await uploadBookPdfToFirebase(bookId, pdfSource);
+                const uint8Array = new Uint8Array(await pdfBlob.arrayBuffer());
+                const saved = await savePdfBytesToFirestore(bookId, uint8Array);
                 const syncedAt = new Date().toISOString();
 
                 const { db, doc, setDoc } = window.__firebase;
@@ -1621,22 +1622,32 @@
                     author: bookData.author,
                     addedDate: bookData.addedDate || syncedAt,
                     lastModified: syncedAt,
-                    pdfUrl
+                    hasPdf: saved
                 }, { merge: true });
 
-                localStorage.setItem(`rsvp_book_${bookId}`, JSON.stringify({ ...bookData, firebasePdfSyncedAt: syncedAt }));
-                console.log('☁️ PDF synchronisé sur Firebase Storage:', bookId);
+                if (saved) {
+                    localStorage.setItem(`rsvp_book_${bookId}`, JSON.stringify({ ...bookData, firebasePdfSyncedAt: syncedAt }));
+                    console.log('☁️ PDF synchronisé sur Firestore:', bookId);
+                }
             } catch (error) {
                 console.error('Erreur de conversion/envoi du PDF vers Firebase:', error);
             }
         }
 
-        // Retélécharge le PDF d'un livre depuis Firebase Storage et ré-extrait son texte, pour
-        // les livres présents dans le compte mais absents de cet appareil (nouvel appareil, cache vidé...).
+        // Récupère le PDF d'un livre depuis Firestore et ré-extrait son texte, pour les livres
+        // présents dans le compte mais absents de cet appareil (nouvel appareil, cache vidé...).
         async function restoreBookFromCloudPdf(remoteBook) {
+            if (!currentUser || !window.__firebase) return;
+            const { db, doc, getDoc } = window.__firebase;
             try {
-                const response = await fetch(remoteBook.pdfUrl);
-                const arrayBuffer = await response.arrayBuffer();
+                const fileSnap = await getDoc(doc(db, 'users', currentUser.uid, 'bookFiles', remoteBook.id));
+                if (!fileSnap.exists()) {
+                    console.warn('⚠️ Aucun PDF disponible côté cloud pour restaurer:', remoteBook.id);
+                    return;
+                }
+
+                const pdfBytes = fileSnap.data().pdfData.toUint8Array();
+                const arrayBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength);
                 const { words: extractedWords } = await extractWordsFromPdfArrayBuffer(arrayBuffer);
 
                 localStorage.setItem(`rsvp_book_${remoteBook.id}`, JSON.stringify({
@@ -1649,9 +1660,9 @@
                     lastModified: remoteBook.lastModified,
                     firebasePdfSyncedAt: remoteBook.lastModified
                 }));
-                console.log('☁️ Livre restauré depuis Firebase Storage:', remoteBook.id);
+                console.log('☁️ Livre restauré depuis Firestore:', remoteBook.id);
             } catch (error) {
-                console.error('Erreur lors de la restauration du livre depuis le PDF cloud:', remoteBook.id, error);
+                console.error('Erreur lors de la restauration du livre depuis Firestore:', remoteBook.id, error);
             }
         }
 
@@ -1670,7 +1681,7 @@
                     const remote = docSnap.data();
                     const hasLocalCopy = !!localStorage.getItem(`rsvp_book_${remote.id}`);
 
-                    if (!hasLocalCopy && remote.pdfUrl) {
+                    if (!hasLocalCopy && remote.hasPdf) {
                         await restoreBookFromCloudPdf(remote);
                     }
 
@@ -1697,7 +1708,7 @@
                 console.error('Erreur lors de la synchronisation depuis Firestore:', error);
             }
 
-            // Pousse vers Firebase (Storage + Firestore) les livres locaux absents du cloud
+            // Pousse vers Firestore les livres locaux absents du cloud
             const localBooks = JSON.parse(localStorage.getItem('rsvp_saved_books') || '[]');
             for (const b of localBooks) {
                 await fbSyncBookAsPdf(b.id);
@@ -2585,7 +2596,7 @@
         }
 
         // Extrait le texte d'un PDF (ArrayBuffer) et le découpe en mots. Réutilisé pour
-        // l'import PDF direct et pour la restauration d'un livre depuis Firebase Storage.
+        // l'import PDF direct et pour la restauration d'un livre depuis Firestore.
         async function extractWordsFromPdfArrayBuffer(arrayBuffer) {
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
@@ -2605,7 +2616,7 @@
         }
 
         // Génère un PDF (texte simple) à partir d'un tableau de mots, pour les livres qui n'ont
-        // pas de PDF source (Gutenberg, Google Books) avant envoi vers Firebase Storage.
+        // pas de PDF source (Gutenberg, Google Books) avant enregistrement dans Firestore.
         function generateBookPdfBlob(title, author, wordsArray) {
             const { jsPDF } = window.jspdf;
             const pdfDoc = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -2689,7 +2700,7 @@
                 }
                 
                 console.log('💾 Livre sauvegardé:', currentBookId, 'avec', words.length, 'mots');
-                // Envoie le PDF original (tel quel) vers Firebase Storage pour le compte connecté
+                // Envoie le PDF original (tel quel) vers Firestore pour le compte connecté
                 fbSyncBookAsPdf(currentBookId, file);
 
                 // Vérifier s'il y a une progression sauvegardée
@@ -2978,10 +2989,27 @@
             });
         }
 
+        // gutenberg.org ne renvoie pas d'en-têtes CORS : un fetch() direct depuis le navigateur
+        // échoue systématiquement. On tente quand même le direct d'abord (au cas où), puis on passe
+        // par un proxy CORS public en repli.
+        async function fetchGutenbergText(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return await response.text();
+            } catch (directError) {
+                console.warn('⚠️ Téléchargement direct impossible (CORS probable), passage par un proxy:', directError);
+                const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error('HTTP ' + response.status + ' (proxy)');
+                return await response.text();
+            }
+        }
+
         async function downloadGutenbergBook(book) {
             try {
                 // Chercher un format texte (préférence : txt, sinon html)
-                const txtUrl = book.formats['text/plain; charset=utf-8'] || 
+                const txtUrl = book.formats['text/plain; charset=utf-8'] ||
                                book.formats['text/plain'] || 
                                book.formats['text/html'];
                 
@@ -2993,9 +3021,8 @@
                 document.getElementById('bookLoading').style.display = 'block';
                 document.getElementById('bookLoading').innerHTML = '<div style="padding: 20px;">Téléchargement du livre...</div>';
 
-                const response = await fetch(txtUrl);
-                let text = await response.text();
-                
+                let text = await fetchGutenbergText(txtUrl);
+
                 // Nettoyer le texte (enlever le header/footer de Gutenberg)
                 text = text.replace(/^\*\*\* START OF .+? \*\*\*/s, '');
                 text = text.replace(/\*\*\* END OF .+? \*\*\*$/s, '');
@@ -3055,38 +3082,6 @@
             }
         }
 
-        function showAnnasArchive() {
-            document.getElementById('bookLoading').style.display = 'none';
-            const bookList = document.getElementById('bookList');
-            
-            bookList.innerHTML = `
-                <div class="info" style="padding: 30px; text-align: center;">
-                    <h3 style="margin-bottom: 15px; color: #16a085;">🏛️ Anna's Archive</h3>
-                    <p style="margin-bottom: 20px; line-height: 1.6;">
-                        Anna's Archive est une bibliothèque numérique contenant des millions de livres gratuits.
-                        Pour utiliser cette fonctionnalité :
-                    </p>
-                    <ol style="text-align: left; max-width: 500px; margin: 0 auto 20px; line-height: 1.8;">
-                        <li>Rendez-vous sur <a href="https://annas-archive.org" target="_blank" style="color: #16a085; font-weight: 600;">annas-archive.org</a></li>
-                        <li>Recherchez et téléchargez un livre au format <strong>PDF</strong> ou <strong>TXT</strong></li>
-                        <li>Revenez ici et cliquez sur "📄 Importer un PDF" sur la page d'accueil</li>
-                        <li>Sélectionnez le fichier téléchargé</li>
-                    </ol>
-                    <button onclick="window.open('https://annas-archive.org', '_blank')" 
-                            style="background: #16a085; color: white; border: none; padding: 12px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 16px; margin-top: 10px;">
-                        Ouvrir Anna's Archive
-                    </button>
-                </div>
-            `;
-        }
-
-        function showAnnasArchiveHome() {
-            // Ouvrir directement le site dans un nouvel onglet
-            window.open('https://annas-archive.org', '_blank');
-            
-            // Afficher une notification
-            alert('📖 Anna\'s Archive s\'ouvre dans un nouvel onglet.\n\n1. Recherchez un livre\n2. Téléchargez-le au format PDF\n3. Revenez ici et cliquez sur "📄 Importer un PDF"');
-        }
     </script>
 </body>
 </html>
