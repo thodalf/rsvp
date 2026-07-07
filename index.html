@@ -1099,6 +1099,7 @@
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <!--
         ========================================================================
@@ -1120,30 +1121,36 @@
         import {
             getFirestore, doc, setDoc, getDoc, getDocs, collection, deleteDoc
         } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+        import {
+            getStorage, ref, uploadBytes, getDownloadURL
+        } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
-        // 🔧 À REMPLACER : collez ici la config de votre projet Firebase
-        // (Console Firebase > Paramètres du projet > Vos applications > Config SDK)
+        // Config Firebase : ces jetons __FIREBASE_...__ sont remplacés au build par les variables
+        // d'environnement Netlify (voir build.js et FIREBASE_SETUP.md). En développement local sans
+        // build, ils restent tels quels et l'app démarre simplement sans connexion/synchronisation.
         const firebaseConfig = {
-            apiKey: "REMPLACER_PAR_VOTRE_API_KEY",
-            authDomain: "REMPLACER.firebaseapp.com",
-            projectId: "REMPLACER",
-            storageBucket: "REMPLACER.appspot.com",
-            messagingSenderId: "REMPLACER",
-            appId: "REMPLACER"
+            apiKey: "__FIREBASE_API_KEY__",
+            authDomain: "__FIREBASE_AUTH_DOMAIN__",
+            projectId: "__FIREBASE_PROJECT_ID__",
+            storageBucket: "__FIREBASE_STORAGE_BUCKET__",
+            messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
+            appId: "__FIREBASE_APP_ID__"
         };
 
-        const isFirebaseConfigured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("REMPLACER");
+        const isFirebaseConfigured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("__FIREBASE_");
 
         if (isFirebaseConfigured) {
             const firebaseApp = initializeApp(firebaseConfig);
             const auth = getAuth(firebaseApp);
             const db = getFirestore(firebaseApp);
+            const storage = getStorage(firebaseApp);
 
             window.__firebase = {
-                auth, db, GoogleAuthProvider, signInWithPopup,
+                auth, db, storage, GoogleAuthProvider, signInWithPopup,
                 createUserWithEmailAndPassword, signInWithEmailAndPassword,
                 signOut, onAuthStateChanged,
-                doc, setDoc, getDoc, getDocs, collection, deleteDoc
+                doc, setDoc, getDoc, getDocs, collection, deleteDoc,
+                ref, uploadBytes, getDownloadURL
             };
         } else {
             console.warn('⚠️ Firebase n\'est pas configuré : la connexion et la synchronisation cloud sont désactivées. Voir FIREBASE_SETUP.md.');
@@ -1470,7 +1477,7 @@
 
         async function resumeBook(bookId) {
             console.log('🔄 Reprise livre:', bookId);
-            
+
             // Charger directement le livre et démarrer la lecture
             const bookData = loadBookData(bookId);
             if (!bookData) {
@@ -1479,7 +1486,8 @@
             }
 
             currentBookId = bookId;
-            
+            fbSyncBookAsPdf(bookId);
+
             // Si le livre a été modifié pendant une lecture précédente, utiliser la version modifiée
             if (bookData.modifiedWords && bookData.modifiedWords.length > 0) {
                 console.log('📚 Utilisation tableau modifié:', bookData.modifiedWords.length, 'mots');
@@ -1557,48 +1565,99 @@
                 localStorage.setItem(`rsvp_book_${currentBookId}`, JSON.stringify(updatedData));
             }
 
-            // Miroir vers Firestore si un compte est connecté (best-effort, non bloquant)
-            fbSyncBook(currentBookId);
+            // Miroir de la progression vers Firestore si un compte est connecté (best-effort, non bloquant)
+            fbSyncProgress(currentBookId);
         }
 
-        // ===== Synchronisation Firestore (livres + progression) avec repli localStorage =====
-        // Pousse le livre et sa progression courante vers Firestore. Ne fait rien hors connexion
-        // ou si Firebase n'est pas configuré : l'app continue de fonctionner avec localStorage seul.
-        async function fbSyncBook(bookId) {
+        // ===== Synchronisation Firestore + Storage (livres convertis en PDF + progression) =====
+        // avec repli localStorage : hors connexion ou sans config Firebase, l'app ne fait rien ici
+        // et continue de fonctionner normalement avec localStorage seul.
+
+        // Pousse uniquement la progression courante (petit document, appelé fréquemment pendant la lecture)
+        async function fbSyncProgress(bookId) {
             if (!currentUser || !window.__firebase || !bookId) return;
-            const bookData = loadBookData(bookId);
-            if (!bookData) return;
+            const progress = loadProgress(bookId);
+            if (!progress) return;
 
             const { db, doc, setDoc } = window.__firebase;
             try {
-                const payload = {
-                    id: bookData.id,
-                    title: bookData.title,
-                    author: bookData.author,
-                    words: bookData.modifiedWords && bookData.modifiedWords.length > 0 ? bookData.modifiedWords : bookData.words,
-                    addedDate: bookData.addedDate || new Date().toISOString(),
-                    lastModified: bookData.lastModified || new Date().toISOString()
-                };
-
-                // Firestore limite un document à 1 Mo : au-delà, on garde le livre en local uniquement
-                const payloadSize = new Blob([JSON.stringify(payload)]).size;
-                if (payloadSize > 900000) {
-                    console.warn('⚠️ Livre trop volumineux pour Firestore (', Math.round(payloadSize / 1024), 'Ko) — conservé en local uniquement:', bookId);
-                } else {
-                    await setDoc(doc(db, 'users', currentUser.uid, 'books', bookId), payload);
-                }
-
-                const progress = loadProgress(bookId);
-                if (progress) {
-                    await setDoc(doc(db, 'users', currentUser.uid, 'progress', bookId), progress);
-                }
+                await setDoc(doc(db, 'users', currentUser.uid, 'progress', bookId), progress);
             } catch (error) {
-                console.error('Erreur de synchronisation Firestore:', error);
+                console.error('Erreur de synchronisation Firestore (progression):', error);
             }
         }
 
-        // Appelée juste après la connexion : fusionne les livres/progressions distants avec le local
-        // (le plus récent l'emporte), puis pousse vers Firestore les livres locaux absents du cloud.
+        // Upload un PDF (Blob ou File) dans Firebase Storage, sous le compte de l'utilisateur connecté
+        async function uploadBookPdfToFirebase(bookId, pdfBlobOrFile) {
+            if (!currentUser || !window.__firebase) return null;
+            const { storage, ref, uploadBytes, getDownloadURL } = window.__firebase;
+            const storageRef = ref(storage, `users/${currentUser.uid}/books/${bookId}.pdf`);
+            await uploadBytes(storageRef, pdfBlobOrFile, { contentType: 'application/pdf' });
+            return await getDownloadURL(storageRef);
+        }
+
+        // Convertit le livre ouvert en PDF (ou reprend le PDF original s'il en existe un, ex. import
+        // direct) et l'envoie vers Firebase Storage pour le compte connecté ; ne fait rien si le
+        // livre a déjà été synchronisé (appel sans risque à chaque ouverture d'un livre).
+        async function fbSyncBookAsPdf(bookId, originalPdfFile) {
+            if (!currentUser || !window.__firebase || !bookId) return;
+            const bookData = loadBookData(bookId);
+            if (!bookData) return;
+            if (bookData.firebasePdfSyncedAt && !originalPdfFile) return;
+
+            try {
+                const pdfSource = originalPdfFile || generateBookPdfBlob(
+                    bookData.title,
+                    bookData.author,
+                    bookData.modifiedWords && bookData.modifiedWords.length > 0 ? bookData.modifiedWords : bookData.words
+                );
+                const pdfUrl = await uploadBookPdfToFirebase(bookId, pdfSource);
+                const syncedAt = new Date().toISOString();
+
+                const { db, doc, setDoc } = window.__firebase;
+                await setDoc(doc(db, 'users', currentUser.uid, 'books', bookId), {
+                    id: bookId,
+                    title: bookData.title,
+                    author: bookData.author,
+                    addedDate: bookData.addedDate || syncedAt,
+                    lastModified: syncedAt,
+                    pdfUrl
+                }, { merge: true });
+
+                localStorage.setItem(`rsvp_book_${bookId}`, JSON.stringify({ ...bookData, firebasePdfSyncedAt: syncedAt }));
+                console.log('☁️ PDF synchronisé sur Firebase Storage:', bookId);
+            } catch (error) {
+                console.error('Erreur de conversion/envoi du PDF vers Firebase:', error);
+            }
+        }
+
+        // Retélécharge le PDF d'un livre depuis Firebase Storage et ré-extrait son texte, pour
+        // les livres présents dans le compte mais absents de cet appareil (nouvel appareil, cache vidé...).
+        async function restoreBookFromCloudPdf(remoteBook) {
+            try {
+                const response = await fetch(remoteBook.pdfUrl);
+                const arrayBuffer = await response.arrayBuffer();
+                const { words: extractedWords } = await extractWordsFromPdfArrayBuffer(arrayBuffer);
+
+                localStorage.setItem(`rsvp_book_${remoteBook.id}`, JSON.stringify({
+                    id: remoteBook.id,
+                    title: remoteBook.title,
+                    author: remoteBook.author,
+                    words: extractedWords,
+                    modifiedWords: extractedWords,
+                    addedDate: remoteBook.addedDate,
+                    lastModified: remoteBook.lastModified,
+                    firebasePdfSyncedAt: remoteBook.lastModified
+                }));
+                console.log('☁️ Livre restauré depuis Firebase Storage:', remoteBook.id);
+            } catch (error) {
+                console.error('Erreur lors de la restauration du livre depuis le PDF cloud:', remoteBook.id, error);
+            }
+        }
+
+        // Appelée juste après la connexion : récupère les livres/progressions du compte (chaque
+        // livre absent de cet appareil est retéléchargé depuis son PDF), puis pousse vers Firebase
+        // les livres locaux qui n'existaient pas encore côté serveur.
         async function syncFromFirestoreOnLogin() {
             if (!currentUser || !window.__firebase) return;
             const { db, collection, getDocs } = window.__firebase;
@@ -1607,28 +1666,18 @@
                 const booksSnap = await getDocs(collection(db, 'users', currentUser.uid, 'books'));
                 let savedBooks = JSON.parse(localStorage.getItem('rsvp_saved_books') || '[]');
 
-                booksSnap.forEach(docSnap => {
+                for (const docSnap of booksSnap.docs) {
                     const remote = docSnap.data();
-                    const localRaw = localStorage.getItem(`rsvp_book_${remote.id}`);
-                    const local = localRaw ? JSON.parse(localRaw) : null;
-                    const remoteIsNewer = !local || !local.lastModified || new Date(remote.lastModified) > new Date(local.lastModified);
+                    const hasLocalCopy = !!localStorage.getItem(`rsvp_book_${remote.id}`);
 
-                    if (remoteIsNewer) {
-                        localStorage.setItem(`rsvp_book_${remote.id}`, JSON.stringify({
-                            id: remote.id,
-                            title: remote.title,
-                            author: remote.author,
-                            words: remote.words,
-                            modifiedWords: remote.words,
-                            addedDate: remote.addedDate,
-                            lastModified: remote.lastModified
-                        }));
+                    if (!hasLocalCopy && remote.pdfUrl) {
+                        await restoreBookFromCloudPdf(remote);
                     }
 
                     if (!savedBooks.find(b => b.id === remote.id)) {
                         savedBooks.push({ id: remote.id, title: remote.title, author: remote.author });
                     }
-                });
+                }
                 localStorage.setItem('rsvp_saved_books', JSON.stringify(savedBooks));
 
                 const progressSnap = await getDocs(collection(db, 'users', currentUser.uid, 'progress'));
@@ -1648,10 +1697,10 @@
                 console.error('Erreur lors de la synchronisation depuis Firestore:', error);
             }
 
-            // Pousse vers Firestore les livres locaux qui n'existaient pas encore côté serveur
+            // Pousse vers Firebase (Storage + Firestore) les livres locaux absents du cloud
             const localBooks = JSON.parse(localStorage.getItem('rsvp_saved_books') || '[]');
             for (const b of localBooks) {
-                await fbSyncBook(b.id);
+                await fbSyncBookAsPdf(b.id);
             }
         }
 
@@ -2081,11 +2130,33 @@
                 // Nettoyer et découper le texte en mots
                 text = text.replace(/<[^>]*>/g, ''); // Supprimer les balises HTML
                 words = text.split(/\s+/).filter(word => word.length > 0);
-                
+
+                // Sauvegarder le livre localement (comme pour les PDF/Gutenberg) pour permettre
+                // la reprise de lecture et la synchronisation Firebase
+                currentBookId = `google_${volumeId}`;
+                const title = data.volumeInfo.title || 'Sans titre';
+                const author = (data.volumeInfo.authors || []).join(', ') || 'Auteur inconnu';
+
+                localStorage.setItem(`rsvp_book_${currentBookId}`, JSON.stringify({
+                    id: currentBookId,
+                    title: title,
+                    author: author,
+                    words: [...words],
+                    modifiedWords: [...words],
+                    addedDate: new Date().toISOString()
+                }));
+
+                let savedBooks = JSON.parse(localStorage.getItem('rsvp_saved_books') || '[]');
+                if (!savedBooks.find(b => b.id === currentBookId)) {
+                    savedBooks.push({ id: currentBookId, title: title, author: author });
+                    localStorage.setItem('rsvp_saved_books', JSON.stringify(savedBooks));
+                }
+                fbSyncBookAsPdf(currentBookId);
+
                 currentWordIndex = 0;
                 updateProgress();
                 displayWord('<span style="color: #ffffff;">Prêt à commencer</span>', true);
-                
+
             } catch (error) {
                 console.error('Erreur:', error);
                 document.getElementById('rsvpWord').innerHTML = '<div class="error">Erreur lors du chargement du contenu</div>';
@@ -2513,6 +2584,67 @@
             document.getElementById('classicReader').style.display = 'none';
         }
 
+        // Extrait le texte d'un PDF (ArrayBuffer) et le découpe en mots. Réutilisé pour
+        // l'import PDF direct et pour la restauration d'un livre depuis Firebase Storage.
+        async function extractWordsFromPdfArrayBuffer(arrayBuffer) {
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += pageText + ' ';
+            }
+
+            fullText = cleanPdfText(fullText);
+            fullText = fullText.replace(/\s+/g, ' ').trim();
+            const extractedWords = fullText.split(/\s+/).filter(word => word.length > 0);
+
+            return { words: extractedWords, numPages: pdf.numPages };
+        }
+
+        // Génère un PDF (texte simple) à partir d'un tableau de mots, pour les livres qui n'ont
+        // pas de PDF source (Gutenberg, Google Books) avant envoi vers Firebase Storage.
+        function generateBookPdfBlob(title, author, wordsArray) {
+            const { jsPDF } = window.jspdf;
+            const pdfDoc = new jsPDF({ unit: 'pt', format: 'a4' });
+            const margin = 40;
+            const pageWidth = pdfDoc.internal.pageSize.getWidth();
+            const pageHeight = pdfDoc.internal.pageSize.getHeight();
+            const maxLineWidth = pageWidth - margin * 2;
+            let y = margin;
+
+            pdfDoc.setFont('helvetica', 'bold');
+            pdfDoc.setFontSize(18);
+            const titleLines = pdfDoc.splitTextToSize(title || 'Sans titre', maxLineWidth);
+            pdfDoc.text(titleLines, margin, y);
+            y += titleLines.length * 22 + 10;
+
+            if (author) {
+                pdfDoc.setFont('helvetica', 'normal');
+                pdfDoc.setFontSize(12);
+                pdfDoc.text(author, margin, y);
+                y += 30;
+            }
+
+            pdfDoc.setFont('helvetica', 'normal');
+            pdfDoc.setFontSize(11);
+            const lineHeight = 15;
+            const bodyLines = pdfDoc.splitTextToSize(wordsArray.join(' '), maxLineWidth);
+
+            bodyLines.forEach(line => {
+                if (y > pageHeight - margin) {
+                    pdfDoc.addPage();
+                    y = margin;
+                }
+                pdfDoc.text(line, margin, y);
+                y += lineHeight;
+            });
+
+            return pdfDoc.output('blob');
+        }
+
         async function handlePdfUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -2523,25 +2655,9 @@
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                
-                let fullText = '';
-                
-                // Extraire le texte de toutes les pages
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map(item => item.str).join(' ');
-                    fullText += pageText + ' ';
-                }
+                const { words: extractedWords, numPages } = await extractWordsFromPdfArrayBuffer(arrayBuffer);
+                words = extractedWords;
 
-                // Nettoyage avancé du texte
-                fullText = cleanPdfText(fullText);
-                
-                // Nettoyer et découper le texte en mots
-                fullText = fullText.replace(/\s+/g, ' ').trim();
-                words = fullText.split(/\s+/).filter(word => word.length > 0);
-                
                 // Créer un ID unique basé sur le nom du fichier et la date
                 currentBookId = `pdf_${file.name}_${Date.now()}`;
                 
@@ -2573,7 +2689,8 @@
                 }
                 
                 console.log('💾 Livre sauvegardé:', currentBookId, 'avec', words.length, 'mots');
-                fbSyncBook(currentBookId);
+                // Envoie le PDF original (tel quel) vers Firebase Storage pour le compte connecté
+                fbSyncBookAsPdf(currentBookId, file);
 
                 // Vérifier s'il y a une progression sauvegardée
                 const savedProgress = loadProgress(currentBookId);
@@ -2587,9 +2704,9 @@
                 } else {
                     currentWordIndex = 0;
                 }
-                
+
                 updateProgress();
-                displayWord(`<span style="color: #00ff00;">Prêt à lire - ${pdf.numPages} pages, ${words.length} mots</span>`, true);
+                displayWord(`<span style="color: #00ff00;">Prêt à lire - ${numPages} pages, ${words.length} mots</span>`, true);
 
             } catch (error) {
                 console.error('Erreur lors de la lecture du PDF:', error);
@@ -2691,15 +2808,16 @@
 
         async function loadSavedBook(bookId) {
             console.log('🔄 Chargement livre sauvegardé:', bookId);
-            
+
             const bookData = loadBookData(bookId);
             if (!bookData) {
                 alert('Erreur : livre introuvable');
                 return;
             }
-            
+
             currentBookId = bookId;
-            
+            fbSyncBookAsPdf(bookId);
+
             // Si le livre a été modifié pendant une lecture précédente, utiliser la version modifiée
             if (bookData.modifiedWords && bookData.modifiedWords.length > 0) {
                 console.log('📚 Utilisation tableau modifié:', bookData.modifiedWords.length, 'mots');
@@ -2919,7 +3037,7 @@
                 }
                 
                 console.log('💾 Livre Gutenberg sauvegardé:', currentBookId, 'avec', words.length, 'mots');
-                fbSyncBook(currentBookId);
+                fbSyncBookAsPdf(currentBookId);
 
                 currentWordIndex = 0;
                 

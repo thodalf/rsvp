@@ -34,7 +34,7 @@
 
 ---
 
-### Option 2 : Netlify Drop (GRATUIT, ULTRA-SIMPLE)
+### Option 2a : Netlify Drop (GRATUIT, ULTRA-SIMPLE, sans Firebase)
 
 **Étapes :**
 
@@ -49,7 +49,34 @@
 
 4. (Optionnel) Vous pouvez personnaliser le nom de domaine dans les settings
 
+⚠️ Netlify Drop n'exécute pas `build.js` : la connexion/synchronisation
+Firebase reste désactivée (l'app fonctionne quand même en local). Pour
+activer Firebase via des variables d'environnement, utilisez plutôt
+l'option 2b.
+
 **⏱️ Temps : 30 secondes**
+
+---
+
+### Option 2b : Netlify relié à Git (GRATUIT, avec Firebase)
+
+Cette option exécute `netlify.toml` / `build.js` au déploiement, ce qui
+permet de configurer Firebase via des variables d'environnement plutôt que
+de coder la config en dur dans `index.html`. Voir `FIREBASE_SETUP.md` pour
+le détail complet.
+
+**Étapes :**
+
+1. Poussez ce dépôt sur GitHub (ou GitLab/Bitbucket)
+2. Sur [app.netlify.com](https://app.netlify.com), **Add new site > Import an existing project**
+3. Sélectionnez votre dépôt : Netlify détecte `netlify.toml` (commande de
+   build `node build.js`, dossier publié `dist`)
+4. Dans **Site settings > Environment variables**, ajoutez `FIREBASE_API_KEY`,
+   `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_STORAGE_BUCKET`,
+   `FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_APP_ID`
+5. Déclenchez un déploiement (**Trigger deploy**)
+
+**⏱️ Temps : 5 minutes**
 
 ---
 
