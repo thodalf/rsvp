@@ -4,7 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Liseuse Google Books - Lecture Rapide RSVP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: #6c5ce7;
+            --primary-dark: #5847d1;
+            --secondary: #00cec9;
+            --accent: #fd79a8;
+            --gradient: linear-gradient(135deg, #6c5ce7 0%, #a855f7 50%, #00cec9 100%);
+            --gradient-soft: linear-gradient(135deg, #7c6ef2 0%, #6c5ce7 100%);
+            --bg-soft: #f6f5ff;
+            --text-dark: #2d2d3a;
+            --text-muted: #6b6b7b;
+            --card-radius: 18px;
+            --shadow-soft: 0 8px 30px rgba(108, 92, 231, 0.12);
+            --shadow-lift: 0 16px 40px rgba(108, 92, 231, 0.22);
+            --nav-height: 74px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,39 +31,66 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--gradient);
+            background-attachment: fixed;
             min-height: 100vh;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             padding: 20px;
+            padding-bottom: calc(var(--nav-height) + 30px);
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Poppins', 'Segoe UI', sans-serif;
         }
 
         .container {
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border-radius: 24px;
+            box-shadow: var(--shadow-lift);
             max-width: 900px;
             width: 100%;
             overflow: hidden;
+            margin: 20px auto;
+            animation: containerFadeIn 0.35s ease;
+        }
+
+        @keyframes containerFadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--gradient);
             color: white;
-            padding: 30px;
+            padding: 34px 30px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), transparent 40%),
+                        radial-gradient(circle at 80% 80%, rgba(255,255,255,0.12), transparent 45%);
+            pointer-events: none;
         }
 
         .header h1 {
-            font-size: 28px;
+            font-size: 26px;
+            font-weight: 700;
             margin-bottom: 10px;
+            position: relative;
         }
 
         .header p {
-            opacity: 0.9;
+            opacity: 0.92;
             font-size: 14px;
+            position: relative;
         }
 
         .auth-section {
@@ -53,7 +99,7 @@
         }
 
         .auth-section button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--gradient-soft);
             color: white;
             border: none;
             padding: 15px 40px;
@@ -62,17 +108,18 @@
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
             font-weight: 600;
+            box-shadow: var(--shadow-soft);
         }
 
         .auth-section button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lift);
         }
 
         .books-in-progress {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
+            background: var(--bg-soft);
+            border-radius: var(--card-radius);
+            padding: 22px;
             margin-bottom: 30px;
         }
 
@@ -180,27 +227,31 @@
         .book-item {
             cursor: pointer;
             border: 2px solid transparent;
-            border-radius: 10px;
+            border-radius: 14px;
             padding: 10px;
-            transition: all 0.3s;
+            transition: all 0.25s ease;
             text-align: center;
+            background: white;
+            box-shadow: 0 2px 10px rgba(45, 45, 58, 0.06);
         }
 
         .book-item:hover {
-            border-color: #667eea;
-            background: #f8f9ff;
+            border-color: var(--primary);
+            background: var(--bg-soft);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-soft);
         }
 
         .book-item.selected {
-            border-color: #667eea;
-            background: #f0f3ff;
+            border-color: var(--primary);
+            background: var(--bg-soft);
         }
 
         .book-cover {
             width: 100%;
             height: 200px;
             object-fit: cover;
-            border-radius: 8px;
+            border-radius: 10px;
             margin-bottom: 10px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
@@ -319,7 +370,7 @@
         }
 
         .controls button {
-            background: #667eea;
+            background: var(--gradient-soft);
             color: white;
             border: none;
             padding: 12px 25px;
@@ -328,15 +379,17 @@
             font-size: 14px;
             font-weight: 600;
             transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(108, 92, 231, 0.25);
         }
 
         .controls button:hover {
-            background: #5568d3;
             transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(108, 92, 231, 0.35);
         }
 
         .controls button:disabled {
             background: #ccc;
+            box-shadow: none;
             cursor: not-allowed;
             transform: none;
         }
@@ -345,9 +398,9 @@
             display: flex;
             align-items: center;
             gap: 15px;
-            background: #f8f9fa;
+            background: var(--bg-soft);
             padding: 15px 25px;
-            border-radius: 25px;
+            border-radius: 20px;
         }
 
         .speed-control label {
@@ -569,18 +622,297 @@
             .rsvp-word {
                 font-size: 32px;
             }
-            
+
             .rsvp-word .focus {
                 font-size: 40px;
             }
-            
+
             .controls {
                 flex-direction: column;
             }
-            
+
             .speed-control {
                 flex-direction: column;
             }
+        }
+
+        /* ===== Navigation basse (menu principal) ===== */
+        .bottom-nav {
+            position: fixed;
+            left: 50%;
+            bottom: 16px;
+            transform: translateX(-50%);
+            width: min(560px, calc(100% - 24px));
+            height: var(--nav-height);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 26px;
+            box-shadow: var(--shadow-lift);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            z-index: 500;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 8px 14px;
+            border-radius: 16px;
+            transition: all 0.2s ease;
+            flex: 1;
+            max-width: 110px;
+        }
+
+        .nav-item .nav-icon {
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        .nav-item.active {
+            color: var(--primary);
+            background: var(--bg-soft);
+            transform: translateY(-3px);
+        }
+
+        .nav-item:hover {
+            color: var(--primary);
+        }
+
+        .nav-item .nav-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        /* ===== Bouton retour ===== */
+        .back-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            color: var(--text-dark);
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 10px 18px 10px 14px;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: var(--shadow-soft);
+            z-index: 600;
+            transition: all 0.2s ease;
+        }
+
+        .back-btn:hover {
+            transform: translateX(-2px);
+            box-shadow: var(--shadow-lift);
+        }
+
+        .back-btn.visible {
+            display: inline-flex;
+        }
+
+        body.screen-reader .back-btn {
+            top: 20px;
+        }
+
+        @media (max-width: 480px) {
+            .bottom-nav {
+                width: calc(100% - 16px);
+                bottom: 10px;
+            }
+            .nav-item {
+                font-size: 10px;
+                padding: 8px 6px;
+            }
+        }
+
+        /* ===== Écran Compte (Firebase) ===== */
+        .account-section {
+            padding: 40px;
+            display: none;
+        }
+
+        .account-card {
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        .account-profile {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .account-avatar {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin: 0 auto 16px;
+            box-shadow: var(--shadow-soft);
+            border: 3px solid white;
+        }
+
+        .account-avatar-placeholder {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            margin: 0 auto 16px;
+            background: var(--gradient-soft);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            font-weight: 700;
+            font-family: 'Poppins', sans-serif;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .account-form input {
+            width: 100%;
+            padding: 13px 16px;
+            border-radius: 12px;
+            border: 1.5px solid #e4e2f5;
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+
+        .account-form input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .account-form button,
+        .account-google-btn,
+        .account-logout-btn {
+            width: 100%;
+            padding: 13px;
+            border-radius: 12px;
+            border: none;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .account-form button[type="submit"] {
+            background: var(--gradient-soft);
+            color: white;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 10px;
+        }
+
+        .account-form button[type="submit"]:hover {
+            box-shadow: var(--shadow-lift);
+            transform: translateY(-2px);
+        }
+
+        .account-google-btn {
+            background: white;
+            border: 1.5px solid #e4e2f5;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .account-google-btn:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .account-logout-btn {
+            background: #fee2e6;
+            color: #d63447;
+            margin-top: 10px;
+        }
+
+        .account-logout-btn:hover {
+            background: #fdcdd3;
+        }
+
+        .account-toggle {
+            text-align: center;
+            margin-top: 14px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .account-toggle a {
+            color: var(--primary);
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .account-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 18px 0;
+            color: #b5b3c8;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .account-divider::before,
+        .account-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e4e2f5;
+        }
+
+        .account-error {
+            background: #fee2e6;
+            color: #d63447;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        .account-status-pill {
+            display: inline-block;
+            background: #e6fbf5;
+            color: #0d9488;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 14px;
+            border-radius: 20px;
+            margin-bottom: 8px;
+        }
+
+        .guest-note {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 18px;
+            line-height: 1.6;
         }
     </style>
 </head>
@@ -597,25 +929,25 @@
             <h3 style="color: #333; margin-bottom: 20px;">Choisir un livre</h3>
             
             <div style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-bottom: 30px;">
-                <button onclick="showProjectGutenberg(); document.getElementById('authSection').style.display='none'; document.getElementById('mainContent').style.display='block';" 
+                <button onclick="showProjectGutenberg(); navigateTo('library');"
                         style="background: #e74c3c; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
                     📖 Project Gutenberg
                 </button>
-                <button onclick="document.getElementById('pdfInput').click()" 
+                <button onclick="document.getElementById('pdfInput').click()"
                         style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
                     📄 Importer un PDF
                 </button>
-                <button onclick="showAnnasArchiveHome()" 
+                <button onclick="showAnnasArchiveHome()"
                         style="background: #16a085; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
                     🏛️ Anna's Archive
                 </button>
             </div>
-            
+
             <div style="margin: 30px 0; color: #999; font-weight: 600;">OU</div>
-            
-            <p style="margin-bottom: 20px; color: #666;">Connectez-vous avec votre compte Google pour accéder à vos livres</p>
-            <button onclick="handleSignIn()">Se connecter avec Google</button>
-            
+
+            <p style="margin-bottom: 20px; color: #666;">Connectez-vous pour retrouver vos livres et votre progression sur tous vos appareils</p>
+            <button onclick="navigateTo('account')">👤 Se connecter / Créer un compte</button>
+
             <input type="file" id="pdfInput" accept=".pdf" style="display: none;" onchange="handlePdfUpload(event)">
         </div>
 
@@ -704,10 +1036,123 @@
                 </div>
             </div>
         </div>
+
+        <div class="account-section" id="accountSection">
+            <div class="account-card">
+                <div id="accountSignedOut">
+                    <h2 style="text-align:center; margin-bottom: 20px; color: var(--text-dark);">Mon compte</h2>
+                    <div class="account-error" id="accountError"></div>
+
+                    <button class="account-google-btn" onclick="handleFirebaseGoogleSignIn()">
+                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.3 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.3 2.7l6-6C33.6 6.5 29 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.4-.3-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c2.8 0 5.3 1 7.3 2.7l6-6C33.6 6.5 29 4.5 24 4.5c-7.6 0-14.1 4.3-17.4 10.6z"/><path fill="#4CAF50" d="M24 43.5c5.2 0 9.9-1.9 13.5-5.1l-6.2-5.3C29.4 34.6 26.9 35.5 24 35.5c-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.8 39.1 16.4 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.2 5.3C40.9 36 43.5 30.6 43.5 24c0-1.2-.1-2.4-.3-3.5z"/></svg>
+                        Continuer avec Google
+                    </button>
+
+                    <div class="account-divider">OU</div>
+
+                    <form class="account-form" id="accountForm" onsubmit="handleFirebaseEmailAuth(event)">
+                        <input type="email" id="accountEmail" placeholder="Adresse e-mail" required>
+                        <input type="password" id="accountPassword" placeholder="Mot de passe" minlength="6" required>
+                        <button type="submit" id="accountSubmitBtn">Se connecter</button>
+                    </form>
+                    <div class="account-toggle">
+                        <span id="accountToggleText">Pas encore de compte ?</span>
+                        <a onclick="toggleAccountMode()" id="accountToggleLink">Créer un compte</a>
+                    </div>
+
+                    <p class="guest-note">Vous pouvez aussi explorer sans compte : vos livres et votre progression resteront alors enregistrés uniquement sur cet appareil.</p>
+                </div>
+
+                <div id="accountSignedIn" style="display:none;">
+                    <div class="account-profile">
+                        <span class="account-status-pill">✓ Connecté</span>
+                        <div id="accountAvatarWrap"></div>
+                        <h3 id="accountName" style="color: var(--text-dark); margin-bottom: 4px;"></h3>
+                        <p id="accountEmailDisplay" style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;"></p>
+                        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">Vos livres et votre progression sont synchronisés sur tous vos appareils.</p>
+                        <button class="account-logout-btn" onclick="handleFirebaseSignOut()">Se déconnecter</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <button class="back-btn" id="backBtn" onclick="goToMainMenu()">
+        <span>←</span> Retour
+    </button>
+
+    <nav class="bottom-nav" id="bottomNav">
+        <button class="nav-item" id="navHome" onclick="navigateTo('home')">
+            <span class="nav-icon">🏠</span>
+            <span>Accueil</span>
+        </button>
+        <button class="nav-item" id="navLibrary" onclick="navigateTo('library')">
+            <span class="nav-icon">📚</span>
+            <span>Bibliothèque</span>
+        </button>
+        <button class="nav-item" id="navAccount" onclick="navigateTo('account')">
+            <span class="nav-icon" id="navAccountIcon">👤</span>
+            <img class="nav-avatar" id="navAccountAvatar" style="display:none;" alt="">
+            <span id="navAccountLabel">Compte</span>
+        </button>
+    </nav>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <!--
+        ========================================================================
+        CONFIGURATION FIREBASE
+        ========================================================================
+        Remplacez les valeurs ci-dessous par celles de VOTRE projet Firebase.
+        Voir FIREBASE_SETUP.md à la racine du projet pour la marche à suivre
+        complète (création du projet, activation de l'authentification,
+        activation de Firestore, règles de sécurité...).
+        ========================================================================
+    -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+        import {
+            getAuth, GoogleAuthProvider, signInWithPopup,
+            createUserWithEmailAndPassword, signInWithEmailAndPassword,
+            signOut, onAuthStateChanged
+        } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+        import {
+            getFirestore, doc, setDoc, getDoc, getDocs, collection, deleteDoc
+        } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+        // 🔧 À REMPLACER : collez ici la config de votre projet Firebase
+        // (Console Firebase > Paramètres du projet > Vos applications > Config SDK)
+        const firebaseConfig = {
+            apiKey: "REMPLACER_PAR_VOTRE_API_KEY",
+            authDomain: "REMPLACER.firebaseapp.com",
+            projectId: "REMPLACER",
+            storageBucket: "REMPLACER.appspot.com",
+            messagingSenderId: "REMPLACER",
+            appId: "REMPLACER"
+        };
+
+        const isFirebaseConfigured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("REMPLACER");
+
+        if (isFirebaseConfigured) {
+            const firebaseApp = initializeApp(firebaseConfig);
+            const auth = getAuth(firebaseApp);
+            const db = getFirestore(firebaseApp);
+
+            window.__firebase = {
+                auth, db, GoogleAuthProvider, signInWithPopup,
+                createUserWithEmailAndPassword, signInWithEmailAndPassword,
+                signOut, onAuthStateChanged,
+                doc, setDoc, getDoc, getDocs, collection, deleteDoc
+            };
+        } else {
+            console.warn('⚠️ Firebase n\'est pas configuré : la connexion et la synchronisation cloud sont désactivées. Voir FIREBASE_SETUP.md.');
+            window.__firebase = null;
+        }
+
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
+
     <script>
         // Configurer PDF.js
         if (typeof pdfjsLib !== 'undefined') {
@@ -737,12 +1182,181 @@
         let currentMusicContext = null;
         let lastContextAnalysis = 0;
         let contextAnalysisInterval = 50; // Analyser le contexte tous les 50 mots
+        let currentUser = null; // Utilisateur Firebase connecté (null si non connecté)
+        let currentScreen = 'home';
+
+        // ===== Navigation entre les écrans (Accueil / Bibliothèque / Lecture / Compte) =====
+        function navigateTo(screen) {
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'none';
+            document.getElementById('accountSection').style.display = 'none';
+
+            if (screen === 'home') {
+                document.getElementById('authSection').style.display = 'block';
+                displayBooksInProgress();
+            } else if (screen === 'library') {
+                document.getElementById('mainContent').style.display = 'block';
+                document.getElementById('bookSelector').style.display = 'block';
+                document.getElementById('rsvpReader').style.display = 'none';
+            } else if (screen === 'reader') {
+                document.getElementById('mainContent').style.display = 'block';
+                document.getElementById('bookSelector').style.display = 'none';
+                document.getElementById('rsvpReader').style.display = 'block';
+            } else if (screen === 'account') {
+                document.getElementById('accountSection').style.display = 'block';
+            }
+
+            currentScreen = screen;
+
+            // Bouton retour : visible partout sauf sur l'écran d'accueil
+            document.getElementById('backBtn').classList.toggle('visible', screen !== 'home');
+
+            // Met à jour l'onglet actif du menu du bas
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            if (screen === 'home') {
+                document.getElementById('navHome').classList.add('active');
+            } else if (screen === 'library' || screen === 'reader') {
+                document.getElementById('navLibrary').classList.add('active');
+            } else if (screen === 'account') {
+                document.getElementById('navAccount').classList.add('active');
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
         // Charger les paramètres globaux au démarrage
         window.addEventListener('DOMContentLoaded', () => {
             loadGlobalSettings();
-            displayBooksInProgress();
+            navigateTo('home');
         });
+
+        // ===== Authentification Firebase (connexion, création de compte, déconnexion) =====
+        let firebaseAuthMode = 'login'; // 'login' ou 'register'
+
+        window.addEventListener('firebase-ready', () => {
+            if (!window.__firebase) {
+                updateAccountUI();
+                return;
+            }
+            const { auth, onAuthStateChanged } = window.__firebase;
+            onAuthStateChanged(auth, async (user) => {
+                currentUser = user;
+                updateAccountUI();
+                displayBooksInProgress();
+                if (user) {
+                    await syncFromFirestoreOnLogin();
+                }
+            });
+        });
+
+        function requireFirebase() {
+            if (!window.__firebase) {
+                showAccountError("Firebase n'est pas configuré sur ce site. Voir FIREBASE_SETUP.md pour l'activer.");
+                return false;
+            }
+            return true;
+        }
+
+        function showAccountError(message) {
+            const el = document.getElementById('accountError');
+            if (!el) return;
+            el.textContent = message;
+            el.style.display = message ? 'block' : 'none';
+        }
+
+        async function handleFirebaseGoogleSignIn() {
+            if (!requireFirebase()) return;
+            showAccountError('');
+            const { auth, GoogleAuthProvider, signInWithPopup } = window.__firebase;
+            try {
+                const provider = new GoogleAuthProvider();
+                await signInWithPopup(auth, provider);
+                navigateTo('home');
+            } catch (error) {
+                console.error('Erreur connexion Google:', error);
+                showAccountError('Connexion Google impossible : ' + error.message);
+            }
+        }
+
+        function toggleAccountMode() {
+            firebaseAuthMode = firebaseAuthMode === 'login' ? 'register' : 'login';
+            document.getElementById('accountSubmitBtn').textContent = firebaseAuthMode === 'login' ? 'Se connecter' : 'Créer mon compte';
+            document.getElementById('accountToggleText').textContent = firebaseAuthMode === 'login' ? 'Pas encore de compte ?' : 'Déjà un compte ?';
+            document.getElementById('accountToggleLink').textContent = firebaseAuthMode === 'login' ? 'Créer un compte' : 'Se connecter';
+            showAccountError('');
+        }
+
+        async function handleFirebaseEmailAuth(event) {
+            event.preventDefault();
+            if (!requireFirebase()) return;
+            showAccountError('');
+            const { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword } = window.__firebase;
+            const email = document.getElementById('accountEmail').value.trim();
+            const password = document.getElementById('accountPassword').value;
+            try {
+                if (firebaseAuthMode === 'login') {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } else {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                }
+                navigateTo('home');
+            } catch (error) {
+                console.error('Erreur authentification email:', error);
+                showAccountError(translateFirebaseError(error));
+            }
+        }
+
+        function translateFirebaseError(error) {
+            const map = {
+                'auth/invalid-email': 'Adresse e-mail invalide.',
+                'auth/user-not-found': 'Aucun compte ne correspond à cet e-mail.',
+                'auth/wrong-password': 'Mot de passe incorrect.',
+                'auth/email-already-in-use': 'Un compte existe déjà avec cet e-mail.',
+                'auth/weak-password': 'Le mot de passe doit contenir au moins 6 caractères.',
+                'auth/invalid-credential': 'E-mail ou mot de passe incorrect.',
+                'auth/too-many-requests': 'Trop de tentatives. Réessayez plus tard.'
+            };
+            return map[error.code] || 'Une erreur est survenue. Réessayez.';
+        }
+
+        async function handleFirebaseSignOut() {
+            if (!window.__firebase) return;
+            const { auth, signOut } = window.__firebase;
+            await signOut(auth);
+            navigateTo('home');
+        }
+
+        function updateAccountUI() {
+            const signedOut = document.getElementById('accountSignedOut');
+            const signedIn = document.getElementById('accountSignedIn');
+            const navIcon = document.getElementById('navAccountIcon');
+            const navAvatar = document.getElementById('navAccountAvatar');
+
+            if (currentUser) {
+                signedOut.style.display = 'none';
+                signedIn.style.display = 'block';
+                document.getElementById('accountName').textContent = currentUser.displayName || 'Mon compte';
+                document.getElementById('accountEmailDisplay').textContent = currentUser.email || '';
+
+                const avatarWrap = document.getElementById('accountAvatarWrap');
+                if (currentUser.photoURL) {
+                    avatarWrap.innerHTML = `<img src="${currentUser.photoURL}" class="account-avatar" alt="Avatar">`;
+                    navIcon.style.display = 'none';
+                    navAvatar.src = currentUser.photoURL;
+                    navAvatar.style.display = 'block';
+                } else {
+                    const initial = (currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase();
+                    avatarWrap.innerHTML = `<div class="account-avatar-placeholder">${initial}</div>`;
+                    navIcon.style.display = 'inline';
+                    navAvatar.style.display = 'none';
+                }
+            } else {
+                signedOut.style.display = 'block';
+                signedIn.style.display = 'none';
+                navIcon.style.display = 'inline';
+                navAvatar.style.display = 'none';
+            }
+        }
 
         function saveGlobalSettings() {
             const settings = {
@@ -901,13 +1515,10 @@
             }
 
             // Passer à l'interface de lecture
-            document.getElementById('authSection').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'block';
-            document.getElementById('bookSelector').style.display = 'none';
-            document.getElementById('rsvpReader').style.display = 'block';
-            
+            navigateTo('reader');
+
             updateProgress();
-            
+
             // Afficher le mot actuel (sans le passer en mode centré)
             if (currentWordIndex < words.length && currentWordIndex > 0) {
                 console.log('📍 Affichage mot actuel:', words[currentWordIndex]);
@@ -922,17 +1533,17 @@
         // Fonctions de sauvegarde et chargement
         function saveProgress() {
             if (!currentBookId) return;
-            
+
             const progress = {
                 bookId: currentBookId,
                 wordIndex: currentWordIndex,
                 totalWords: words.length,
                 lastUpdate: new Date().toISOString()
             };
-            
+
             console.log('💾 Sauvegarde progression:', progress);
             localStorage.setItem(`rsvp_progress_${currentBookId}`, JSON.stringify(progress));
-            
+
             // TOUJOURS sauvegarder le tableau de mots actuel (même s'il n'a pas changé)
             // Cela garantit que le tableau correspond à la progression
             const bookData = loadBookData(currentBookId);
@@ -944,6 +1555,103 @@
                     lastModified: new Date().toISOString()
                 };
                 localStorage.setItem(`rsvp_book_${currentBookId}`, JSON.stringify(updatedData));
+            }
+
+            // Miroir vers Firestore si un compte est connecté (best-effort, non bloquant)
+            fbSyncBook(currentBookId);
+        }
+
+        // ===== Synchronisation Firestore (livres + progression) avec repli localStorage =====
+        // Pousse le livre et sa progression courante vers Firestore. Ne fait rien hors connexion
+        // ou si Firebase n'est pas configuré : l'app continue de fonctionner avec localStorage seul.
+        async function fbSyncBook(bookId) {
+            if (!currentUser || !window.__firebase || !bookId) return;
+            const bookData = loadBookData(bookId);
+            if (!bookData) return;
+
+            const { db, doc, setDoc } = window.__firebase;
+            try {
+                const payload = {
+                    id: bookData.id,
+                    title: bookData.title,
+                    author: bookData.author,
+                    words: bookData.modifiedWords && bookData.modifiedWords.length > 0 ? bookData.modifiedWords : bookData.words,
+                    addedDate: bookData.addedDate || new Date().toISOString(),
+                    lastModified: bookData.lastModified || new Date().toISOString()
+                };
+
+                // Firestore limite un document à 1 Mo : au-delà, on garde le livre en local uniquement
+                const payloadSize = new Blob([JSON.stringify(payload)]).size;
+                if (payloadSize > 900000) {
+                    console.warn('⚠️ Livre trop volumineux pour Firestore (', Math.round(payloadSize / 1024), 'Ko) — conservé en local uniquement:', bookId);
+                } else {
+                    await setDoc(doc(db, 'users', currentUser.uid, 'books', bookId), payload);
+                }
+
+                const progress = loadProgress(bookId);
+                if (progress) {
+                    await setDoc(doc(db, 'users', currentUser.uid, 'progress', bookId), progress);
+                }
+            } catch (error) {
+                console.error('Erreur de synchronisation Firestore:', error);
+            }
+        }
+
+        // Appelée juste après la connexion : fusionne les livres/progressions distants avec le local
+        // (le plus récent l'emporte), puis pousse vers Firestore les livres locaux absents du cloud.
+        async function syncFromFirestoreOnLogin() {
+            if (!currentUser || !window.__firebase) return;
+            const { db, collection, getDocs } = window.__firebase;
+
+            try {
+                const booksSnap = await getDocs(collection(db, 'users', currentUser.uid, 'books'));
+                let savedBooks = JSON.parse(localStorage.getItem('rsvp_saved_books') || '[]');
+
+                booksSnap.forEach(docSnap => {
+                    const remote = docSnap.data();
+                    const localRaw = localStorage.getItem(`rsvp_book_${remote.id}`);
+                    const local = localRaw ? JSON.parse(localRaw) : null;
+                    const remoteIsNewer = !local || !local.lastModified || new Date(remote.lastModified) > new Date(local.lastModified);
+
+                    if (remoteIsNewer) {
+                        localStorage.setItem(`rsvp_book_${remote.id}`, JSON.stringify({
+                            id: remote.id,
+                            title: remote.title,
+                            author: remote.author,
+                            words: remote.words,
+                            modifiedWords: remote.words,
+                            addedDate: remote.addedDate,
+                            lastModified: remote.lastModified
+                        }));
+                    }
+
+                    if (!savedBooks.find(b => b.id === remote.id)) {
+                        savedBooks.push({ id: remote.id, title: remote.title, author: remote.author });
+                    }
+                });
+                localStorage.setItem('rsvp_saved_books', JSON.stringify(savedBooks));
+
+                const progressSnap = await getDocs(collection(db, 'users', currentUser.uid, 'progress'));
+                progressSnap.forEach(docSnap => {
+                    const remote = docSnap.data();
+                    const localRaw = localStorage.getItem(`rsvp_progress_${remote.bookId}`);
+                    const local = localRaw ? JSON.parse(localRaw) : null;
+                    const remoteIsNewer = !local || new Date(remote.lastUpdate) > new Date(local.lastUpdate);
+                    if (remoteIsNewer) {
+                        localStorage.setItem(`rsvp_progress_${remote.bookId}`, JSON.stringify(remote));
+                    }
+                });
+
+                console.log('☁️ Synchronisation Firestore terminée');
+                displayBooksInProgress();
+            } catch (error) {
+                console.error('Erreur lors de la synchronisation depuis Firestore:', error);
+            }
+
+            // Pousse vers Firestore les livres locaux qui n'existaient pas encore côté serveur
+            const localBooks = JSON.parse(localStorage.getItem('rsvp_saved_books') || '[]');
+            for (const b of localBooks) {
+                await fbSyncBook(b.id);
             }
         }
 
@@ -1275,8 +1983,7 @@
                 callback: (response) => {
                     if (response.access_token) {
                         accessToken = response.access_token;
-                        document.getElementById('authSection').style.display = 'none';
-                        document.getElementById('mainContent').style.display = 'block';
+                        navigateTo('library');
                         loadBooks();
                     }
                 },
@@ -1339,8 +2046,7 @@
             });
 
             // Afficher le lecteur RSVP
-            document.getElementById('bookSelector').style.display = 'none';
-            document.getElementById('rsvpReader').style.display = 'block';
+            navigateTo('reader');
 
             // Charger le contenu du livre
             await loadBookContent();
@@ -1791,8 +2497,7 @@
 
         function changeBook() {
             pauseReading();
-            document.getElementById('rsvpReader').style.display = 'none';
-            document.getElementById('bookSelector').style.display = 'block';
+            navigateTo('library');
             currentWordIndex = 0;
             words = [];
         }
@@ -1812,10 +2517,7 @@
             const file = event.target.files[0];
             if (!file) return;
 
-            document.getElementById('authSection').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'block';
-            document.getElementById('bookSelector').style.display = 'none';
-            document.getElementById('rsvpReader').style.display = 'block';
+            navigateTo('reader');
 
             displayWord('<span style="color: #ffaa00;">Extraction du texte du PDF...</span>', true);
 
@@ -1871,7 +2573,8 @@
                 }
                 
                 console.log('💾 Livre sauvegardé:', currentBookId, 'avec', words.length, 'mots');
-                
+                fbSyncBook(currentBookId);
+
                 // Vérifier s'il y a une progression sauvegardée
                 const savedProgress = loadProgress(currentBookId);
                 if (savedProgress && savedProgress.totalWords === words.length) {
@@ -1936,17 +2639,21 @@
 
         function returnToStart() {
             pauseReading();
-            document.getElementById('rsvpReader').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'none';
-            document.getElementById('authSection').style.display = 'block';
+            if (currentBookId) {
+                saveProgress();
+            }
             currentWordIndex = 0;
             words = [];
             currentBook = null;
             currentBookId = null;
             // Réinitialiser l'input file
             document.getElementById('pdfInput').value = '';
-            // Rafraîchir la liste des livres en cours
-            displayBooksInProgress();
+            navigateTo('home');
+        }
+
+        // Bouton retour global : sauvegarde la progression en cours puis revient au menu principal
+        function goToMainMenu() {
+            returnToStart();
         }
 
         function showSavedBooks() {
@@ -2035,10 +2742,9 @@
             }
             
             // Afficher le lecteur
-            document.getElementById('bookSelector').style.display = 'none';
-            document.getElementById('rsvpReader').style.display = 'block';
+            navigateTo('reader');
             updateProgress();
-            
+
             if (currentWordIndex > 0 && currentWordIndex < words.length) {
                 console.log('📍 Affichage mot actuel:', words[currentWordIndex]);
                 displayWord(words[currentWordIndex], false);
@@ -2213,12 +2919,12 @@
                 }
                 
                 console.log('💾 Livre Gutenberg sauvegardé:', currentBookId, 'avec', words.length, 'mots');
+                fbSyncBook(currentBookId);
 
                 currentWordIndex = 0;
                 
                 // Afficher le lecteur
-                document.getElementById('bookSelector').style.display = 'none';
-                document.getElementById('rsvpReader').style.display = 'block';
+                navigateTo('reader');
                 document.getElementById('bookLoading').style.display = 'none';
                 
                 updateProgress();
