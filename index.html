@@ -605,20 +605,68 @@
 
         .fullscreen-exit-hint {
             position: fixed;
-            bottom: 20px;
+            top: 24px;
             left: 50%;
             transform: translateX(-50%);
-            color: #666;
-            font-size: 14px;
-            opacity: 0.7;
+            color: #ccc;
+            font-size: 13px;
+            opacity: 0.85;
             z-index: 10000;
             background: rgba(0, 0, 0, 0.8);
             padding: 10px 20px;
             border-radius: 20px;
             pointer-events: none;
+            text-align: center;
+        }
+
+        /* En plein écran, les options de lecture (play/pause/vitesse/quitter) restent accessibles
+           dans une barre flottante en bas de l'écran, au-dessus du mot affiché. */
+        body.fullscreen-active .controls {
+            position: fixed;
+            left: 50%;
+            bottom: 20px;
+            transform: translateX(-50%);
+            z-index: 10000;
+            background: rgba(20, 20, 25, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 12px 16px;
+            border-radius: 24px;
+            max-width: calc(100vw - 24px);
+            margin: 0;
+        }
+
+        body.fullscreen-active .controls button {
+            padding: 10px 18px;
+            font-size: 13px;
         }
 
         @media (max-width: 768px) {
+            body {
+                padding: 12px;
+                padding-bottom: calc(var(--nav-height) + 24px);
+            }
+
+            .header {
+                padding: 24px 20px;
+            }
+
+            .header h1 {
+                font-size: 21px;
+            }
+
+            .auth-section,
+            .book-selector,
+            .rsvp-reader,
+            .account-section {
+                padding: 20px;
+            }
+
+            .rsvp-display {
+                padding: 30px 16px;
+                min-height: 150px;
+            }
+
             .rsvp-word {
                 font-size: 32px;
             }
@@ -627,12 +675,46 @@
                 font-size: 40px;
             }
 
+            .rsvp-display.fullscreen .rsvp-word {
+                font-size: 42px;
+            }
+
+            .rsvp-display.fullscreen .rsvp-word .focus {
+                font-size: 50px;
+            }
+
+            .book-list {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 14px;
+            }
+
+            .book-cover {
+                height: 150px;
+            }
+
             .controls {
                 flex-direction: column;
             }
 
             .speed-control {
                 flex-direction: column;
+            }
+
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+
+            body.fullscreen-active .controls {
+                flex-direction: row;
+                flex-wrap: wrap;
+                bottom: 12px;
+                padding: 10px 12px;
+                gap: 8px;
+            }
+
+            body.fullscreen-active .controls button {
+                padding: 8px 14px;
+                font-size: 12px;
             }
         }
 
@@ -742,6 +824,62 @@
             .nav-item {
                 font-size: 10px;
                 padding: 8px 6px;
+            }
+
+            .back-btn {
+                top: 14px;
+                left: 14px;
+                padding: 8px 14px 8px 12px;
+                font-size: 12px;
+            }
+
+            .header {
+                padding: 20px 16px;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .header p {
+                font-size: 12px;
+            }
+
+            .auth-section,
+            .book-selector,
+            .rsvp-reader,
+            .account-section {
+                padding: 16px;
+            }
+
+            .rsvp-display {
+                padding: 20px 12px;
+                min-height: 130px;
+            }
+
+            .rsvp-word {
+                font-size: 26px;
+            }
+
+            .rsvp-word .focus {
+                font-size: 32px;
+            }
+
+            .book-list {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+                gap: 10px;
+            }
+
+            .book-cover {
+                height: 120px;
+            }
+
+            .book-title {
+                font-size: 12px;
+            }
+
+            .book-author {
+                font-size: 11px;
             }
         }
 
@@ -2494,20 +2632,21 @@
             if (isFullscreen) {
                 // Sortir du plein écran
                 rsvpDisplay.classList.remove('fullscreen');
+                document.body.classList.remove('fullscreen-active');
                 fullscreenBtn.textContent = '⛶ Plein écran';
                 isFullscreen = false;
-                
+
                 // PAUSE AUTOMATIQUE lors de la sortie du plein écran
                 if (isPlaying) {
                     pauseReading();
                 }
-                
+
                 // Retirer l'indication
                 if (fullscreenHint) {
                     fullscreenHint.remove();
                     fullscreenHint = null;
                 }
-                
+
                 // Sortir du mode plein écran du navigateur si actif
                 if (document.fullscreenElement) {
                     document.exitFullscreen();
@@ -2515,13 +2654,14 @@
             } else {
                 // Entrer en plein écran
                 rsvpDisplay.classList.add('fullscreen');
+                document.body.classList.add('fullscreen-active');
                 fullscreenBtn.textContent = '⛶ Quitter plein écran';
                 isFullscreen = true;
-                
+
                 // Ajouter une indication pour sortir
                 fullscreenHint = document.createElement('div');
                 fullscreenHint.className = 'fullscreen-exit-hint';
-                fullscreenHint.textContent = 'Cliquez n\'importe où ou appuyez sur Échap pour quitter';
+                fullscreenHint.textContent = 'Options de lecture en bas · Échap ou « Quitter plein écran » pour sortir';
                 document.body.appendChild(fullscreenHint);
                 
                 // Masquer l'indication après 3 secondes
@@ -2545,12 +2685,28 @@
             }
         }
 
-        // Clic sur le lecteur RSVP pour sortir du plein écran
+        // Clic/tap sur la zone de lecture : sur mobile, bascule lecture/pause ; sur desktop,
+        // un clic pendant le plein écran en sort (les options restent de toute façon accessibles
+        // via la barre de contrôles superposée).
         document.addEventListener('DOMContentLoaded', () => {
             const rsvpDisplay = document.querySelector('.rsvp-display');
             if (rsvpDisplay) {
                 rsvpDisplay.addEventListener('click', (e) => {
-                    if (isFullscreen && e.target.closest('.rsvp-display')) {
+                    if (!e.target.closest('.rsvp-display')) return;
+
+                    const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+
+                    if (isTouchDevice) {
+                        if (words.length === 0) return;
+                        if (isPlaying) {
+                            pauseReading();
+                        } else {
+                            startReading();
+                        }
+                        return;
+                    }
+
+                    if (isFullscreen) {
                         toggleFullscreen();
                     }
                 });
