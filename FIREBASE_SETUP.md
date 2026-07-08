@@ -121,6 +121,9 @@ service cloud.firestore {
 users/{uid}/books/{bookId}       → { id, title, author, addedDate, lastModified, hasPdf }
 users/{uid}/bookFiles/{bookId}   → { pdfData: Bytes }   (le PDF lui-même)
 users/{uid}/progress/{bookId}    → { bookId, wordIndex, totalWords, lastUpdate }
+users/{uid}/settings/reader      → { wpm, maxWordLength, autoSpeedEnabled, pauseOnPunctuation,
+                                      pauseOnProperNoun, pausePunctuationMultiplier,
+                                      pauseProperNounMultiplier, ambientMusicEnabled, lastModified }
 ```
 
 Le PDF est séparé de la fiche livre (`books/{bookId}`) pour que consulter la
@@ -141,10 +144,14 @@ fichiers payant.
   s'il n'a encore jamais été synchronisé, il est converti en PDF (ou le PDF
   original est réutilisé pour un import direct) et enregistré dans Firestore,
   en tâche de fond, sans bloquer la lecture.
-- À la connexion : les livres présents côté cloud mais absents de cet
-  appareil sont récupérés et leur texte ré-extrait ; les progressions
-  distantes et locales sont fusionnées (la plus récente l'emporte) ; les
-  livres locaux absents du cloud y sont poussés.
+- À la connexion : les paramètres de lecture (vitesse, longueur max, pauses,
+  musique) sont fusionnés en premier (le plus récent l'emporte, `lastModified`
+  à l'appui), puis les livres présents côté cloud mais absents de cet
+  appareil sont récupérés et leur texte ré-extrait, et les progressions
+  distantes et locales sont fusionnées de la même façon ; les livres locaux
+  absents du cloud y sont poussés.
+- Chaque changement de réglage (vitesse, longueur max, pauses, musique) est
+  aussi répercuté sur Firestore en tâche de fond, comme la progression.
 - Ensuite, chaque sauvegarde de progression (toutes les 10 mots, fin de
   livre, retour au menu) est répercutée sur Firestore (document léger, pas de
   nouvel envoi du PDF).

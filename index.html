@@ -1158,7 +1158,7 @@
                         <button onclick="resetReading()">⏮</button>
                         <div class="speed-control compact">
                             <label for="fsWpmSlider">Vitesse</label>
-                            <input type="range" id="fsWpmSlider" min="100" max="1000" value="250" step="50" oninput="updateSpeed(this.value)">
+                            <input type="range" id="fsWpmSlider" min="100" max="1000" value="250" step="10" oninput="updateSpeed(this.value)">
                             <span class="speed-value" id="fsWpmValue">250 mpm</span>
                         </div>
                         <button onclick="toggleFullscreen()">✕ Quitter</button>
@@ -1180,7 +1180,7 @@
                 <div class="settings-grid">
                     <div class="speed-control compact">
                         <label for="wpmSlider">Vitesse</label>
-                        <input type="range" id="wpmSlider" min="100" max="1000" value="250" step="50" oninput="updateSpeed(this.value)">
+                        <input type="range" id="wpmSlider" min="100" max="1000" value="250" step="10" oninput="updateSpeed(this.value)">
                         <span class="speed-value" id="wpmValue">250 mpm</span>
                     </div>
 
@@ -1446,6 +1446,7 @@
                 updateAccountUI();
                 displayBooksInProgress();
                 if (user) {
+                    await syncSettingsFromFirestore();
                     await syncFromFirestoreOnLogin();
                 }
             });
@@ -1569,45 +1570,51 @@
                 pauseOnProperNoun: pauseOnProperNoun,
                 pausePunctuationMultiplier: pausePunctuationMultiplier,
                 pauseProperNounMultiplier: pauseProperNounMultiplier,
-                ambientMusicEnabled: ambientMusicEnabled
+                ambientMusicEnabled: ambientMusicEnabled,
+                lastModified: new Date().toISOString()
             };
-            
+
             localStorage.setItem('rsvp_global_settings', JSON.stringify(settings));
             console.log('💾 Paramètres globaux sauvegardés:', settings);
+
+            // Miroir vers Firestore si un compte est connecté (best-effort, non bloquant)
+            fbSyncSettings(settings);
+        }
+
+        // Applique un objet de paramètres (local ou reçu de Firestore) aux variables globales
+        // et à l'interface. Les valeurs sont bornées aux limites des sliders, au cas où une
+        // valeur invalide serait restée d'une session précédente.
+        function applySettings(settings) {
+            baseWpm = Math.min(1000, Math.max(100, settings.wpm || 250));
+            currentWpm = baseWpm;
+            maxWordLength = Math.min(15, Math.max(6, settings.maxWordLength || 12));
+            autoSpeedEnabled = settings.autoSpeedEnabled !== undefined ? settings.autoSpeedEnabled : true;
+            pauseOnPunctuation = settings.pauseOnPunctuation !== undefined ? settings.pauseOnPunctuation : true;
+            pauseOnProperNoun = settings.pauseOnProperNoun !== undefined ? settings.pauseOnProperNoun : true;
+            pausePunctuationMultiplier = settings.pausePunctuationMultiplier || 2.5;
+            pauseProperNounMultiplier = settings.pauseProperNounMultiplier || 1.8;
+            ambientMusicEnabled = settings.ambientMusicEnabled || false;
+
+            document.getElementById('wpmSlider').value = baseWpm;
+            document.getElementById('wpmValue').textContent = baseWpm + ' mpm';
+            document.getElementById('fsWpmSlider').value = baseWpm;
+            document.getElementById('fsWpmValue').textContent = baseWpm + ' mpm';
+            document.getElementById('currentSpeedDisplay').textContent = baseWpm + ' mpm';
+            document.getElementById('maxWordLengthSlider').value = maxWordLength;
+            document.getElementById('maxWordLengthValue').textContent = maxWordLength + ' car.';
+            document.getElementById('autospeedCheck').checked = autoSpeedEnabled;
+            document.getElementById('pausePunctuationCheck').checked = pauseOnPunctuation;
+            document.getElementById('pauseProperNounCheck').checked = pauseOnProperNoun;
+            document.getElementById('pausePunctuationDuration').value = pausePunctuationMultiplier;
+            document.getElementById('pauseProperNounDuration').value = pauseProperNounMultiplier;
+            document.getElementById('ambientMusicCheck').checked = ambientMusicEnabled;
         }
 
         function loadGlobalSettings() {
             const saved = localStorage.getItem('rsvp_global_settings');
             if (saved) {
                 const settings = JSON.parse(saved);
-                
-                // Appliquer les paramètres (bornés aux limites des sliders, au cas où une
-                // valeur invalide serait restée d'une session précédente)
-                baseWpm = Math.min(1000, Math.max(100, settings.wpm || 250));
-                currentWpm = baseWpm;
-                maxWordLength = Math.min(15, Math.max(6, settings.maxWordLength || 12));
-                autoSpeedEnabled = settings.autoSpeedEnabled !== undefined ? settings.autoSpeedEnabled : true;
-                pauseOnPunctuation = settings.pauseOnPunctuation !== undefined ? settings.pauseOnPunctuation : true;
-                pauseOnProperNoun = settings.pauseOnProperNoun !== undefined ? settings.pauseOnProperNoun : true;
-                pausePunctuationMultiplier = settings.pausePunctuationMultiplier || 2.5;
-                pauseProperNounMultiplier = settings.pauseProperNounMultiplier || 1.8;
-                ambientMusicEnabled = settings.ambientMusicEnabled || false;
-                
-                // Mettre à jour l'interface
-                document.getElementById('wpmSlider').value = baseWpm;
-                document.getElementById('wpmValue').textContent = baseWpm + ' mpm';
-                document.getElementById('fsWpmSlider').value = baseWpm;
-                document.getElementById('fsWpmValue').textContent = baseWpm + ' mpm';
-                document.getElementById('currentSpeedDisplay').textContent = baseWpm + ' mpm';
-                document.getElementById('maxWordLengthSlider').value = maxWordLength;
-                document.getElementById('maxWordLengthValue').textContent = maxWordLength + ' car.';
-                document.getElementById('autospeedCheck').checked = autoSpeedEnabled;
-                document.getElementById('pausePunctuationCheck').checked = pauseOnPunctuation;
-                document.getElementById('pauseProperNounCheck').checked = pauseOnProperNoun;
-                document.getElementById('pausePunctuationDuration').value = pausePunctuationMultiplier;
-                document.getElementById('pauseProperNounDuration').value = pauseProperNounMultiplier;
-                document.getElementById('ambientMusicCheck').checked = ambientMusicEnabled;
-                
+                applySettings(settings);
                 console.log('📖 Paramètres globaux chargés:', settings);
             }
         }
@@ -1782,6 +1789,48 @@
                 await setDoc(doc(db, 'users', currentUser.uid, 'progress', bookId), progress);
             } catch (error) {
                 console.error('Erreur de synchronisation Firestore (progression):', error);
+            }
+        }
+
+        // Pousse les paramètres de lecture (vitesse, longueur max, pauses, musique) vers Firestore
+        async function fbSyncSettings(settings) {
+            if (!currentUser || !window.__firebase) return;
+            const { db, doc, setDoc } = window.__firebase;
+            try {
+                await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'reader'), settings);
+            } catch (error) {
+                console.error('Erreur de synchronisation Firestore (paramètres):', error);
+            }
+        }
+
+        // Appelée à la connexion : récupère les paramètres de lecture du compte et les applique
+        // s'ils sont plus récents que ceux de cet appareil ; sinon pousse les paramètres locaux.
+        async function syncSettingsFromFirestore() {
+            if (!currentUser || !window.__firebase) return;
+            const { db, doc, getDoc } = window.__firebase;
+
+            try {
+                const snap = await getDoc(doc(db, 'users', currentUser.uid, 'settings', 'reader'));
+                const localRaw = localStorage.getItem('rsvp_global_settings');
+                const local = localRaw ? JSON.parse(localRaw) : null;
+
+                if (!snap.exists()) {
+                    if (local) await fbSyncSettings(local);
+                    return;
+                }
+
+                const remote = snap.data();
+                const remoteIsNewer = !local || !local.lastModified || new Date(remote.lastModified) > new Date(local.lastModified);
+
+                if (remoteIsNewer) {
+                    localStorage.setItem('rsvp_global_settings', JSON.stringify(remote));
+                    applySettings(remote);
+                    console.log('☁️ Paramètres de lecture restaurés depuis Firestore');
+                } else {
+                    await fbSyncSettings(local);
+                }
+            } catch (error) {
+                console.error('Erreur lors de la synchronisation des paramètres depuis Firestore:', error);
             }
         }
 
