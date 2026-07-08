@@ -44,4 +44,9 @@ function replaceTokens(content) {
 const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 fs.writeFileSync(path.join(OUT_DIR, 'index.html'), replaceTokens(indexHtml));
 
+// Fichiers de la webapp (manifeste, service worker, icônes) : copie telle quelle
+fs.copyFileSync(path.join(ROOT, 'manifest.json'), path.join(OUT_DIR, 'manifest.json'));
+fs.copyFileSync(path.join(ROOT, 'sw.js'), path.join(OUT_DIR, 'sw.js'));
+fs.cpSync(path.join(ROOT, 'icons'), path.join(OUT_DIR, 'icons'), { recursive: true });
+
 console.log('✅ Build terminé :', path.join(OUT_DIR, 'index.html'));

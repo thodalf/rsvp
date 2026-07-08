@@ -1,5 +1,15 @@
 # 🚀 Guide de Déploiement - Liseuse RSVP
 
+## 📱 Application installable (PWA)
+
+Le site est configuré comme webapp installable (`manifest.json` + `sw.js` +
+icônes dans `icons/`) : sur mobile (Android/iOS) le navigateur propose
+« Ajouter à l'écran d'accueil », et sur desktop Chrome/Edge affiche une icône
+d'installation dans la barre d'adresse. Nécessite HTTPS (tous les
+déploiements ci-dessous en fournissent un), sauf en local via `localhost`.
+Aucune configuration supplémentaire requise : ces fichiers sont statiques et
+ne dépendent pas des variables Firebase.
+
 ## Options de Déploiement (du plus simple au plus avancé)
 
 ### Option 1 : GitHub Pages (GRATUIT et SIMPLE) ⭐ RECOMMANDÉ
