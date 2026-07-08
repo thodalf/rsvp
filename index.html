@@ -284,6 +284,23 @@
             display: none;
         }
 
+        /* Englobe l'affichage RSVP et la barre du plein écran : en usage normal, se comporte
+           comme si ses enfants étaient directement dans .rsvp-reader (display:contents). En
+           plein écran, devient une colonne flex plein écran (l'affichage prend l'espace
+           restant, la barre reste en bas), sans chevaucher le reste de l'interface. */
+        .rsvp-stage {
+            display: contents;
+        }
+
+        .rsvp-stage.fullscreen {
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            inset: 0;
+            background: #000000;
+            z-index: 9999;
+        }
+
         .rsvp-display {
             background: #000000;
             border-radius: 15px;
@@ -588,29 +605,24 @@
             background: #5568d3;
         }
 
-        .rsvp-display.fullscreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #000000;
-            z-index: 9999;
+        .rsvp-stage.fullscreen .rsvp-display {
+            flex: 1;
+            min-height: 0;
             margin: 0;
             border-radius: 0;
             border: none;
             cursor: pointer;
         }
 
-        .rsvp-display.fullscreen .rsvp-pointer {
+        .rsvp-stage.fullscreen .rsvp-pointer {
             height: 100px;
         }
 
-        .rsvp-display.fullscreen .rsvp-word {
+        .rsvp-stage.fullscreen .rsvp-word {
             font-size: 64px;
         }
 
-        .rsvp-display.fullscreen .rsvp-word .focus {
+        .rsvp-stage.fullscreen .rsvp-word .focus {
             font-size: 72px;
         }
 
@@ -630,39 +642,48 @@
             text-align: center;
         }
 
-        /* En plein écran, les options de lecture (play/pause/vitesse/quitter) restent accessibles
-           dans une barre flottante en bas de l'écran, au-dessus du mot affiché. */
-        body.fullscreen-active .controls {
-            position: fixed;
-            left: 50%;
-            bottom: 20px;
-            transform: translateX(-50%);
-            z-index: 10000;
-            background: rgba(20, 20, 25, 0.65);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 12px 16px;
-            border-radius: 24px;
-            max-width: calc(100vw - 24px);
-            margin: 0;
+        /* Barre de contrôles du plein écran : masquée en usage normal, affichée en bas de
+           l'écran (dans le flux flex de .rsvp-stage.fullscreen) une fois en plein écran. */
+        .fullscreen-bar {
+            display: none;
         }
 
-        body.fullscreen-active .controls button {
-            padding: 10px 18px;
+        .rsvp-stage.fullscreen .fullscreen-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            flex: 0 0 auto;
+            padding: 14px 16px;
+            background: #0a0a0a;
+            border-top: 1px solid #222;
+        }
+
+        .fullscreen-bar button {
+            background: var(--gradient-soft);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 20px;
+            cursor: pointer;
             font-size: 13px;
+            font-weight: 600;
         }
 
-        #fullscreenSpeedControl {
-            flex: 0 1 220px;
-            min-width: 180px;
+        .fullscreen-bar button:disabled {
+            background: #444;
+            cursor: not-allowed;
         }
 
-        body.fullscreen-active .controls #fullscreenSpeedControl {
+        .fullscreen-bar .speed-control.compact {
             background: rgba(255, 255, 255, 0.12);
+            flex: 0 1 200px;
+            min-width: 160px;
         }
 
-        body.fullscreen-active .controls #fullscreenSpeedControl label,
-        body.fullscreen-active .controls #fullscreenSpeedControl .speed-value {
+        .fullscreen-bar .speed-control.compact label,
+        .fullscreen-bar .speed-control.compact .speed-value {
             color: #ffffff;
         }
 
@@ -700,11 +721,11 @@
                 font-size: 40px;
             }
 
-            .rsvp-display.fullscreen .rsvp-word {
+            .rsvp-stage.fullscreen .rsvp-word {
                 font-size: 42px;
             }
 
-            .rsvp-display.fullscreen .rsvp-word .focus {
+            .rsvp-stage.fullscreen .rsvp-word .focus {
                 font-size: 50px;
             }
 
@@ -729,15 +750,12 @@
                 grid-template-columns: 1fr;
             }
 
-            body.fullscreen-active .controls {
-                flex-direction: row;
-                flex-wrap: wrap;
-                bottom: 12px;
+            .fullscreen-bar {
                 padding: 10px 12px;
                 gap: 8px;
             }
 
-            body.fullscreen-active .controls button {
+            .fullscreen-bar button {
                 padding: 8px 14px;
                 font-size: 12px;
             }
@@ -1128,9 +1146,23 @@
                 </div>
                 <div class="progress-text" id="progressText">0 / 0 mots (0%)</div>
 
-                <div class="rsvp-display">
-                    <div class="rsvp-pointer"></div>
-                    <div class="rsvp-word centered" id="rsvpWord"><span style="color: #ffffff;">Sélectionnez un livre</span></div>
+                <div class="rsvp-stage" id="rsvpStage">
+                    <div class="rsvp-display">
+                        <div class="rsvp-pointer"></div>
+                        <div class="rsvp-word centered" id="rsvpWord"><span style="color: #ffffff;">Sélectionnez un livre</span></div>
+                    </div>
+
+                    <div class="fullscreen-bar" id="fullscreenBar">
+                        <button onclick="startReading()" id="fsPlayBtn">▶</button>
+                        <button onclick="pauseReading()" id="fsPauseBtn" disabled>⏸</button>
+                        <button onclick="resetReading()">⏮</button>
+                        <div class="speed-control compact">
+                            <label for="fsWpmSlider">Vitesse</label>
+                            <input type="range" id="fsWpmSlider" min="100" max="1000" value="250" step="50" oninput="updateSpeed(this.value)">
+                            <span class="speed-value" id="fsWpmValue">250 mpm</span>
+                        </div>
+                        <button onclick="toggleFullscreen()">✕ Quitter</button>
+                    </div>
                 </div>
 
                 <div class="classic-reader" id="classicReader" style="display: none;">
@@ -1141,16 +1173,17 @@
                     <button onclick="startReading()" id="playBtn">▶ Lecture</button>
                     <button onclick="pauseReading()" id="pauseBtn" disabled>⏸ Pause</button>
                     <button onclick="resetReading()">⏮ Recommencer</button>
-                    <div class="speed-control compact" id="fullscreenSpeedControl">
-                        <label for="wpmSlider">Vitesse</label>
-                        <input type="range" id="wpmSlider" min="100" max="1000" value="250" step="50" oninput="updateSpeed()">
-                        <span class="speed-value" id="wpmValue">250 mpm</span>
-                    </div>
                     <button onclick="toggleFullscreen()" id="fullscreenBtn">⛶ Plein écran</button>
                     <button onclick="handleChangeBook()" id="changeBookBtn">📚 Changer de livre</button>
                 </div>
 
                 <div class="settings-grid">
+                    <div class="speed-control compact">
+                        <label for="wpmSlider">Vitesse</label>
+                        <input type="range" id="wpmSlider" min="100" max="1000" value="250" step="50" oninput="updateSpeed(this.value)">
+                        <span class="speed-value" id="wpmValue">250 mpm</span>
+                    </div>
+
                     <div class="speed-control compact">
                         <label for="maxWordLengthSlider">Longueur max</label>
                         <input type="range" id="maxWordLengthSlider" min="6" max="15" value="12" step="1" oninput="updateMaxWordLength()">
@@ -1548,10 +1581,11 @@
             if (saved) {
                 const settings = JSON.parse(saved);
                 
-                // Appliquer les paramètres
-                baseWpm = settings.wpm || 250;
+                // Appliquer les paramètres (bornés aux limites des sliders, au cas où une
+                // valeur invalide serait restée d'une session précédente)
+                baseWpm = Math.min(1000, Math.max(100, settings.wpm || 250));
                 currentWpm = baseWpm;
-                maxWordLength = settings.maxWordLength || 12;
+                maxWordLength = Math.min(15, Math.max(6, settings.maxWordLength || 12));
                 autoSpeedEnabled = settings.autoSpeedEnabled !== undefined ? settings.autoSpeedEnabled : true;
                 pauseOnPunctuation = settings.pauseOnPunctuation !== undefined ? settings.pauseOnPunctuation : true;
                 pauseOnProperNoun = settings.pauseOnProperNoun !== undefined ? settings.pauseOnProperNoun : true;
@@ -1562,6 +1596,8 @@
                 // Mettre à jour l'interface
                 document.getElementById('wpmSlider').value = baseWpm;
                 document.getElementById('wpmValue').textContent = baseWpm + ' mpm';
+                document.getElementById('fsWpmSlider').value = baseWpm;
+                document.getElementById('fsWpmValue').textContent = baseWpm + ' mpm';
                 document.getElementById('currentSpeedDisplay').textContent = baseWpm + ' mpm';
                 document.getElementById('maxWordLengthSlider').value = maxWordLength;
                 document.getElementById('maxWordLengthValue').textContent = maxWordLength + ' car.';
@@ -2352,7 +2388,9 @@
             isPlaying = true;
             document.getElementById('playBtn').disabled = true;
             document.getElementById('pauseBtn').disabled = false;
-            
+            document.getElementById('fsPlayBtn').disabled = true;
+            document.getElementById('fsPauseBtn').disabled = false;
+
             // Afficher le lecteur classique
             document.getElementById('classicReader').style.display = 'block';
             
@@ -2375,73 +2413,59 @@
             }
 
             let word = words[currentWordIndex];
-            
-            // ÉTAPE 1: Séparer par les tirets si le mot en contient
-            if (word.includes('-') && !word.startsWith('-') && !word.endsWith('-')) {
-                const parts = word.split('-').filter(p => p.length > 0);
-                
-                // Si on a plusieurs parties valides
-                if (parts.length > 1) {
-                    const wordsToInsert = [];
-                    for (let i = 0; i < parts.length; i++) {
-                        // Ajouter le tiret à toutes les parties sauf la dernière
-                        if (i < parts.length - 1) {
-                            wordsToInsert.push(parts[i] + '-');
-                        } else {
-                            wordsToInsert.push(parts[i]);
+
+            // Fractionner uniquement les mots réellement trop longs pour un seul flash RSVP.
+            // Un mot composé avec tiret (ex. "dit-il", "peut-être") qui tient déjà dans
+            // maxWordLength N'EST PAS coupé : seule la longueur réelle décide, jamais la
+            // simple présence d'un tiret (c'était l'ancien bug : "dit-il" était scindé en
+            // "dit-" / "il" même s'il tenait très bien en un seul flash).
+            if (word.length > maxWordLength) {
+                const minPartLength = 3;
+                let cutPoint = -1;
+
+                // Point de coupure préféré : le tiret interne le plus proche du milieu du mot
+                const dashPositions = [];
+                for (let i = 1; i < word.length - 1; i++) {
+                    if (word[i] === '-') dashPositions.push(i + 1); // coupe juste après le tiret
+                }
+                if (dashPositions.length > 0) {
+                    const middle = word.length / 2;
+                    dashPositions.sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle));
+                    for (const pos of dashPositions) {
+                        if (pos >= minPartLength && (word.length - pos) >= minPartLength) {
+                            cutPoint = pos;
+                            break;
                         }
                     }
-                    // Remplacer le mot actuel par toutes les parties
-                    words.splice(currentWordIndex, 1, ...wordsToInsert);
-                    word = words[currentWordIndex];
                 }
-            }
-            
-            // ÉTAPE 2: Fractionner les mots trop longs (après séparation par tirets)
-            // Nettoyer le mot des tirets de fin pour vérifier la longueur réelle
-            const cleanWord = word.endsWith('-') ? word.slice(0, -1) : word;
-            const hasDashAtEnd = word.endsWith('-');
-            
-            if (cleanWord.length > maxWordLength) {
-                // Vérifier si le mot peut être fractionné avec minimum 3 caractères par partie
-                const minPartLength = 3;
-                
-                if (cleanWord.length >= (minPartLength * 2)) {
-                    // Calculer le meilleur point de coupure
-                    let cutPoint = Math.floor(cleanWord.length / 2);
-                    
-                    // Ajuster pour respecter le minimum de 3 caractères
+
+                // Sinon, couper au milieu (minimum 3 caractères par partie)
+                if (cutPoint === -1 && word.length >= minPartLength * 2) {
+                    cutPoint = Math.floor(word.length / 2);
                     if (cutPoint < minPartLength) {
                         cutPoint = minPartLength;
                     }
-                    if (cleanWord.length - cutPoint < minPartLength) {
-                        cutPoint = cleanWord.length - minPartLength;
+                    if (word.length - cutPoint < minPartLength) {
+                        cutPoint = word.length - minPartLength;
                     }
-                    
-                    // Double vérification que les deux parties font au moins 3 caractères
-                    const firstPartClean = cleanWord.substring(0, cutPoint);
-                    const secondPartClean = cleanWord.substring(cutPoint);
-                    
-                    if (firstPartClean.length >= minPartLength && secondPartClean.length >= minPartLength) {
-                        // Ajouter un tiret à la première partie
-                        const firstPart = firstPartClean + '-';
-                        const secondPart = hasDashAtEnd ? secondPartClean + '-' : secondPartClean;
-                        
-                        // Insérer la deuxième partie après le mot actuel
-                        words.splice(currentWordIndex + 1, 0, secondPart);
-                        word = firstPart;
-                        
-                        console.log('✂️ Mot fractionné:', cleanWord, '→', firstPartClean, '/', secondPartClean);
-                    } else {
-                        // Ne peut pas être fractionné proprement, garder le mot entier
-                        console.log('⚠️ Mot trop court pour fractionnement:', cleanWord);
-                    }
+                }
+
+                if (cutPoint > 0) {
+                    const firstPart = word.substring(0, cutPoint);
+                    const secondPart = word.substring(cutPoint);
+                    const firstPartDisplay = firstPart.endsWith('-') ? firstPart : firstPart + '-';
+
+                    // Insérer la suite après le mot actuel
+                    words.splice(currentWordIndex + 1, 0, secondPart);
+
+                    console.log('✂️ Mot fractionné:', word, '→', firstPartDisplay, '/', secondPart);
+                    word = firstPartDisplay;
                 } else {
-                    // Mot trop court pour être fractionné (< 6 caractères), garder entier
-                    console.log('ℹ️ Mot conservé entier:', cleanWord);
+                    console.log('ℹ️ Mot trop court pour être fractionné proprement, conservé entier:', word);
                 }
             }
-            
+
+
             displayWord(word, false);
             
             // Calculer le délai de base
@@ -2606,7 +2630,9 @@
             isPlaying = false;
             document.getElementById('playBtn').disabled = false;
             document.getElementById('pauseBtn').disabled = true;
-            
+            document.getElementById('fsPlayBtn').disabled = false;
+            document.getElementById('fsPauseBtn').disabled = true;
+
             // Arrêter la musique d'ambiance
             stopAmbientMusic();
         }
@@ -2621,12 +2647,18 @@
             document.getElementById('classicReader').style.display = 'none';
         }
 
-        function updateSpeed() {
-            baseWpm = parseInt(document.getElementById('wpmSlider').value);
+        // Le slider de vitesse existe en deux exemplaires (paramètres + barre du plein écran,
+        // #wpmSlider et #fsWpmSlider) : on les garde synchronisés quel que soit celui modifié.
+        function updateSpeed(value) {
+            baseWpm = parseInt(value !== undefined ? value : document.getElementById('wpmSlider').value);
             currentWpm = baseWpm; // Réinitialiser la vitesse actuelle à la nouvelle base
+
+            document.getElementById('wpmSlider').value = baseWpm;
             document.getElementById('wpmValue').textContent = `${baseWpm} mpm`;
+            document.getElementById('fsWpmSlider').value = baseWpm;
+            document.getElementById('fsWpmValue').textContent = `${baseWpm} mpm`;
             document.getElementById('currentSpeedDisplay').textContent = `${baseWpm} mpm`;
-            
+
             saveGlobalSettings();
         }
 
@@ -2660,13 +2692,15 @@
         let fullscreenHint = null;
 
         function toggleFullscreen() {
-            const rsvpDisplay = document.querySelector('.rsvp-display');
+            // Le plein écran s'applique à .rsvp-stage (affichage + barre de contrôles basse),
+            // pas seulement à .rsvp-display : cela permet à la barre (vitesse, play/pause,
+            // quitter) de rester visible en bas de l'écran plutôt que d'être masquée derrière.
+            const rsvpStage = document.getElementById('rsvpStage');
             const fullscreenBtn = document.getElementById('fullscreenBtn');
-            
+
             if (isFullscreen) {
                 // Sortir du plein écran
-                rsvpDisplay.classList.remove('fullscreen');
-                document.body.classList.remove('fullscreen-active');
+                rsvpStage.classList.remove('fullscreen');
                 fullscreenBtn.textContent = '⛶ Plein écran';
                 isFullscreen = false;
 
@@ -2687,17 +2721,16 @@
                 }
             } else {
                 // Entrer en plein écran
-                rsvpDisplay.classList.add('fullscreen');
-                document.body.classList.add('fullscreen-active');
+                rsvpStage.classList.add('fullscreen');
                 fullscreenBtn.textContent = '⛶ Quitter plein écran';
                 isFullscreen = true;
 
                 // Ajouter une indication pour sortir
                 fullscreenHint = document.createElement('div');
                 fullscreenHint.className = 'fullscreen-exit-hint';
-                fullscreenHint.textContent = 'Options de lecture en bas · Échap ou « Quitter plein écran » pour sortir';
+                fullscreenHint.textContent = 'Échap ou « Quitter » pour sortir du plein écran';
                 document.body.appendChild(fullscreenHint);
-                
+
                 // Masquer l'indication après 3 secondes
                 setTimeout(() => {
                     if (fullscreenHint) {
@@ -2705,16 +2738,17 @@
                         fullscreenHint.style.transition = 'opacity 0.5s';
                     }
                 }, 3000);
-                
-                // Essayer d'activer le plein écran du navigateur
-                if (rsvpDisplay.requestFullscreen) {
-                    rsvpDisplay.requestFullscreen().catch(err => {
+
+                // Essayer d'activer le plein écran du navigateur (indisponible sur iOS Safari,
+                // qui repose alors uniquement sur le repli CSS position:fixed ci-dessus)
+                if (rsvpStage.requestFullscreen) {
+                    rsvpStage.requestFullscreen().catch(err => {
                         console.log('Plein écran natif non disponible:', err);
                     });
-                } else if (rsvpDisplay.webkitRequestFullscreen) {
-                    rsvpDisplay.webkitRequestFullscreen();
-                } else if (rsvpDisplay.msRequestFullscreen) {
-                    rsvpDisplay.msRequestFullscreen();
+                } else if (rsvpStage.webkitRequestFullscreen) {
+                    rsvpStage.webkitRequestFullscreen();
+                } else if (rsvpStage.msRequestFullscreen) {
+                    rsvpStage.msRequestFullscreen();
                 }
             }
         }
