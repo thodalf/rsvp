@@ -1,55 +1,58 @@
-// Service worker minimal : met en cache la coquille de l'app (HTML/manifeste/icônes) pour
-// permettre l'installation en webapp et un chargement hors-ligne de l'interface. Les livres,
-// Firebase et les API externes (Gutenberg, Google Books) nécessitent toujours une connexion.
-const CACHE_NAME = 'rsvp-shell-v1';
+// Service worker : l'application fonctionne hors ligne (bibliothèque et lecture des livres déjà
+// importés). Les modules PDF/EPUB chargés depuis le CDN sont mis en cache au premier usage.
+const VERSION = 'v2.0.0';
+const SHELL = `shell-${VERSION}`;
+const RUNTIME = 'runtime-v2';
 const APP_SHELL = [
-    './',
-    './index.html',
-    './manifest.json',
-    './icons/icon-192.png',
-    './icons/icon-512.png'
+    './', './index.html', './manifest.json', './css/app.css',
+    './js/app.js', './js/text.js', './js/extract.js', './js/sources.js', './js/store.js',
+    './js/engine.js', './js/cloud.js', './js/config.js',
+    './icons/icon-32.png', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
+const CDN = /^https:\/\/(cdnjs\.cloudflare\.com|www\.gstatic\.com\/firebasejs)\//;
 
-self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => cache.addAll(APP_SHELL))
-            .then(() => self.skipWaiting())
-    );
+self.addEventListener('install', event => {
+    event.waitUntil(caches.open(SHELL).then(c => c.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys()
-            .then((keys) => Promise.all(
-                keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-            ))
+            .then(keys => Promise.all(keys.filter(k => k !== SHELL && k !== RUNTIME).map(k => caches.delete(k))))
             .then(() => self.clients.claim())
     );
 });
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', event => {
     const { request } = event;
-    if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) {
+    if (request.method !== 'GET') return;
+    const url = new URL(request.url);
+
+    // Bibliothèques versionnées du CDN : cache d'abord (elles ne changent jamais)
+    if (CDN.test(request.url)) {
+        event.respondWith(caches.open(RUNTIME).then(async cache => {
+            const hit = await cache.match(request);
+            if (hit) return hit;
+            const res = await fetch(request);
+            if (res.ok) cache.put(request, res.clone());
+            return res;
+        }));
         return;
     }
 
-    if (request.mode === 'navigate') {
-        // Document principal : réseau d'abord (pour avoir la dernière version), repli sur le cache hors-ligne
-        event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', clone));
-                    return response;
-                })
-                .catch(() => caches.match('./index.html'))
-        );
-        return;
-    }
+    if (url.origin !== self.location.origin || url.pathname.includes('/proxy/')) return;
 
-    // Autres ressources same-origin (manifeste, icônes) : cache d'abord, repli sur le réseau
+    // Fichiers de l'application : réseau d'abord (toujours la dernière version), cache hors ligne
     event.respondWith(
-        caches.match(request).then((cached) => cached || fetch(request))
+        fetch(request)
+            .then(res => {
+                if (res.ok && url.search === '') {
+                    const copy = res.clone();
+                    caches.open(SHELL).then(c => c.put(request, copy));
+                }
+                return res;
+            })
+            .catch(() => caches.match(request, { ignoreSearch: true })
+                .then(hit => hit || (request.mode === 'navigate' ? caches.match('./index.html') : Response.error())))
     );
 });

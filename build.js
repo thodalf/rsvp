@@ -1,52 +1,35 @@
-// Script de build Netlify : copie les fichiers statiques du projet vers dist/ en
-// remplaçant les jetons __FIREBASE_...__ d'index.html par les variables d'environnement
-// Netlify (Site settings > Environment variables). Aucune dépendance npm requise.
+// Build Netlify : copie l'application dans dist/ et injecte la configuration Firebase
+// (variables d'environnement) dans js/config.js. Aucune dépendance npm.
 //
 // Usage local : FIREBASE_API_KEY=... FIREBASE_AUTH_DOMAIN=... node build.js
+// Sans variables, l'application fonctionne sans compte (tout reste sur l'appareil).
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = __dirname;
-const OUT_DIR = path.join(ROOT, 'dist');
+const OUT = path.join(ROOT, 'dist');
+const VARS = ['API_KEY', 'AUTH_DOMAIN', 'PROJECT_ID', 'STORAGE_BUCKET', 'MESSAGING_SENDER_ID', 'APP_ID'];
 
-const TOKENS = {
-    '__FIREBASE_API_KEY__': process.env.FIREBASE_API_KEY || '__FIREBASE_API_KEY__',
-    '__FIREBASE_AUTH_DOMAIN__': process.env.FIREBASE_AUTH_DOMAIN || '__FIREBASE_AUTH_DOMAIN__',
-    '__FIREBASE_PROJECT_ID__': process.env.FIREBASE_PROJECT_ID || '__FIREBASE_PROJECT_ID__',
-    '__FIREBASE_STORAGE_BUCKET__': process.env.FIREBASE_STORAGE_BUCKET || '__FIREBASE_STORAGE_BUCKET__',
-    '__FIREBASE_MESSAGING_SENDER_ID__': process.env.FIREBASE_MESSAGING_SENDER_ID || '__FIREBASE_MESSAGING_SENDER_ID__',
-    '__FIREBASE_APP_ID__': process.env.FIREBASE_APP_ID || '__FIREBASE_APP_ID__'
-};
-
-const missing = Object.entries(TOKENS).filter(([, value]) => value.startsWith('__FIREBASE_'));
-if (missing.length > 0) {
-    console.warn(
-        '⚠️  Variables Firebase manquantes, laissées en placeholder : ' +
-        missing.map(([token]) => token).join(', ') +
-        '\n   L\'app se déploiera mais la connexion/synchronisation Firebase restera désactivée.' +
-        '\n   Configurez ces variables dans Netlify (Site settings > Environment variables).'
-    );
+fs.rmSync(OUT, { recursive: true, force: true });
+fs.mkdirSync(OUT, { recursive: true });
+for (const entry of ['index.html', 'manifest.json', 'sw.js', 'css', 'js', 'icons']) {
+    fs.cpSync(path.join(ROOT, entry), path.join(OUT, entry), { recursive: true });
 }
 
-fs.rmSync(OUT_DIR, { recursive: true, force: true });
-fs.mkdirSync(OUT_DIR, { recursive: true });
-
-function replaceTokens(content) {
-    let result = content;
-    for (const [token, value] of Object.entries(TOKENS)) {
-        result = result.split(token).join(value);
-    }
-    return result;
+const configPath = path.join(OUT, 'js', 'config.js');
+let config = fs.readFileSync(configPath, 'utf8');
+const missing = [];
+for (const v of VARS) {
+    const value = process.env['FIREBASE_' + v];
+    if (value) config = config.split(`__FIREBASE_${v}__`).join(value.replace(/'/g, "\\'"));
+    else missing.push('FIREBASE_' + v);
 }
+fs.writeFileSync(configPath, config);
 
-// index.html : copie avec substitution des jetons Firebase
-const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-fs.writeFileSync(path.join(OUT_DIR, 'index.html'), replaceTokens(indexHtml));
+// Nouvelle version du service worker à chaque déploiement : les appareils récupèrent la mise à jour.
+const swPath = path.join(OUT, 'sw.js');
+fs.writeFileSync(swPath, fs.readFileSync(swPath, 'utf8').replace(/const VERSION = '[^']*'/, `const VERSION = '${Date.now()}'`));
 
-// Fichiers de la webapp (manifeste, service worker, icônes) : copie telle quelle
-fs.copyFileSync(path.join(ROOT, 'manifest.json'), path.join(OUT_DIR, 'manifest.json'));
-fs.copyFileSync(path.join(ROOT, 'sw.js'), path.join(OUT_DIR, 'sw.js'));
-fs.cpSync(path.join(ROOT, 'icons'), path.join(OUT_DIR, 'icons'), { recursive: true });
-
-console.log('✅ Build terminé :', path.join(OUT_DIR, 'index.html'));
+if (missing.length) console.warn('⚠️  Firebase non configuré (' + missing.join(', ') + ') : synchronisation désactivée.');
+console.log('✅ Build terminé :', OUT);

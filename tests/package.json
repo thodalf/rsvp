@@ -1,0 +1,2 @@
+{ "name": "rsvp-tests", "private": true, "type": "module",
+  "devDependencies": { "linkedom": "^0.18.4", "jszip": "3.10.1", "pdfjs-dist": "3.11.174" } }
