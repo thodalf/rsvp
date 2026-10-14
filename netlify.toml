@@ -1,6 +1,7 @@
 [build]
   command = "node build.js"
   publish = "dist"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -16,12 +17,6 @@
 [[redirects]]
   from = "/proxy/gutendex/*"
   to = "https://gutendex.com/:splat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/proxy/googleapis/*"
-  to = "https://www.googleapis.com/:splat"
   status = 200
   force = true
 

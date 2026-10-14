@@ -120,6 +120,7 @@ js/store.js       IndexedDB, réglages, reprise de l'ancienne version
 js/cloud.js       synchronisation Firebase (facultative)
 js/pwa.js         installation, mises à jour, partage, ouverture de fichiers, hors ligne
 js/config.js      configuration Firebase (remplie par build.js)
+netlify/functions relais Google Books (clé côté serveur, cache 24 h)
 sw.js             service worker (hors ligne, partage, mises à jour)
 screens/          captures affichées lors de l'installation
 build.js          build Netlify → dist/
@@ -137,8 +138,25 @@ l'application passe automatiquement aux autres routes.
 
 En local : `node build.js && npx serve dist`.
 
-Variable facultative `GOOGLE_BOOKS_API_KEY` (clé d'API Google Books) : sans elle, la recherche
-Google Livres utilise le quota anonyme de Google, suffisant pour un usage personnel.
+### Google Livres et l'erreur 429
+
+Sans clé, Google limite très vite les requêtes anonymes (erreur 429 « Too Many Requests »). Les
+recherches passent donc par le relais du site, `/api/google-books` (fonction Netlify dans
+`netlify/functions/`), qui ajoute une clé d'API côté serveur (elle n'est jamais envoyée au
+navigateur) et garde chaque réponse 24 h en cache sur le CDN. L'appareil garde aussi ses recherches
+24 h. Si Google refuse malgré tout : l'app réessaie, interroge Google directement depuis l'appareil,
+propose la même recherche sur Gutenberg, et pour un téléchargement refusé, récupère automatiquement
+le même livre sur Gutenberg.
+
+Pour créer la clé (gratuit) :
+
+1. [console.cloud.google.com](https://console.cloud.google.com) › choisir un projet (celui de
+   Firebase convient) › *API et services › Bibliothèque* › **Books API** › *Activer*.
+2. *API et services › Identifiants › Créer des identifiants › Clé API*. Dans *Restrictions*,
+   limiter la clé à la **Books API** (pas de restriction d'application : elle est utilisée par le
+   serveur).
+3. Netlify › *Site configuration › Environment variables* › ajouter `GOOGLE_BOOKS_API_KEY`, puis
+   *Deploys › Trigger deploy*.
 
 ## Tests
 

@@ -2,7 +2,7 @@
 
 import { tokenize, pivotIndex, indexAtOffset } from './text.js';
 import { extractAny, extractPasted, extractPdf } from './extract.js';
-import { searchGutenberg, downloadGutenberg, importFromUrl, searchGoogleBooks, downloadGoogleBook } from './sources.js';
+import { searchGutenberg, downloadGutenberg, importFromUrl, searchGoogleBooks, downloadGoogleBook, RateLimitError } from './sources.js';
 import { buildMoodMap, MOODS, MOOD_SEGMENT } from './mood.js';
 import { Ambience } from './ambience.js';
 import { store, textId, loadSettings, saveSettings, migrateLegacy } from './store.js';
@@ -360,6 +360,14 @@ async function runGutenbergSearch() {
         }
     } catch (e) {
         if (signal.aborted) return;
+        if (e instanceof RateLimitError) {
+            ul.replaceChildren(h('li', { class: 'status' },
+                h('p', {}, 'Google limite temporairement les recherches (erreur 429). Réessayez dans quelques minutes.'),
+                h('p', {}, 'La plupart de ces livres existent aussi chez Project Gutenberg :'),
+                h('button', { class: 'btn primary', onclick: () => setCatalog('gutenberg') }, 'Chercher sur Project Gutenberg')
+            ));
+            return;
+        }
         ul.replaceChildren(h('li', { class: 'status' }, navigator.onLine
             ? 'Le catalogue ne répond pas pour le moment. Réessayez dans un instant.'
             : 'Vous êtes hors ligne : la recherche de livres nécessite une connexion.'));
@@ -391,7 +399,12 @@ async function openGoogleBook(r) {
     try {
         const result = await downloadGoogleBook(r, { signal: b.signal, onStatus: b.status });
         unbusy();
-        await addBook(result, { id, source: 'google', sourceId: r.id });
+        if (result.fallback === 'gutenberg') {
+            toast('Google n’a pas répondu : la version Project Gutenberg du même livre a été utilisée.', { ms: 6000 });
+            await addBook(result, { id: 'pg_' + result.gutenbergId, source: 'gutenberg', sourceId: result.gutenbergId });
+        } else {
+            await addBook(result, { id, source: 'google', sourceId: r.id });
+        }
     } catch (e) {
         unbusy();
         if (!b.signal.aborted) toast(e.message, { error: true, ms: 7000 });

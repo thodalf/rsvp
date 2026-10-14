@@ -169,4 +169,31 @@ await test('carte des ambiances', async () => {
     assert.equal(map[map.length - 1], 'epic');
 });
 
+console.log('Relais Google Books (fonction Netlify)');
+await test('relais : clé ajoutée côté serveur, réponse mise en cache 24 h', async () => {
+    const calls = [];
+    globalThis.fetch = async url => { calls.push(String(url)); return new Response(JSON.stringify({ items: [] }), { status: 200 }); };
+    process.env.GOOGLE_BOOKS_API_KEY = 'CLE_TEST';
+    const { default: handler } = await import('../netlify/functions/google-books.mjs');
+    const res = await handler(new Request('https://site/api/google-books?q=hugo&lang=fr'));
+    assert.equal(res.status, 200);
+    assert.ok(calls[0].includes('key=CLE_TEST') && calls[0].includes('filter=free-ebooks') && calls[0].includes('langRestrict=fr'));
+    assert.match(res.headers.get('netlify-cdn-cache-control'), /s-maxage=86400/);
+    delete process.env.GOOGLE_BOOKS_API_KEY;
+});
+await test('relais : 429 de Google réessayé une fois puis signalé, jamais mis en cache', async () => {
+    let n = 0;
+    globalThis.fetch = async () => { n++; return new Response('{}', { status: 429, headers: { 'retry-after': '0.01' } }); };
+    const { default: handler } = await import('../netlify/functions/google-books.mjs');
+    const res = await handler(new Request('https://site/api/google-books?q=hugo'));
+    assert.equal(res.status, 429);
+    assert.equal(n, 2);
+    assert.equal(res.headers.get('netlify-cdn-cache-control'), null);
+    assert.equal((await res.json()).error, 'quota');
+});
+await test('relais : identifiant invalide refusé', async () => {
+    const { default: handler } = await import('../netlify/functions/google-books.mjs');
+    assert.equal((await handler(new Request('https://site/api/google-books?id=../../x'))).status, 400);
+});
+
 console.log(`\n${passed} tests réussis`);

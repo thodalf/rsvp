@@ -23,7 +23,8 @@ def check(cond, msg):
 GUTENDEX = {"results": [
     {"id": 17489, "title": "Les misérables Tome I: Fantine", "authors": [{"name": "Hugo, Victor"}], "languages": ["fr"], "download_count": 5000,
      "formats": {"text/plain; charset=utf-8": "https://www.gutenberg.org/ebooks/17489.txt.utf-8"}},
-    {"id": 13951, "title": "Les trois mousquetaires", "authors": [{"name": "Dumas, Alexandre"}], "languages": ["fr"], "download_count": 4000, "formats": {}}
+    {"id": 13951, "title": "Les trois mousquetaires", "authors": [{"name": "Dumas, Alexandre"}], "languages": ["fr"], "download_count": 4000, "formats": {}},
+    {"id": 4650, "title": "Candide", "authors": [{"name": "Voltaire"}], "languages": ["fr"], "download_count": 3000, "formats": {}}
 ]}
 BOOK = ("The Project Gutenberg eBook of Les misérables\r\n\r\n*** START OF THE PROJECT GUTENBERG EBOOK LES MISÉRABLES ***\r\n\r\n"
         "Produced by Volunteers\r\n\r\nLIVRE PREMIER--UN JUSTE\r\n\r\n"
@@ -48,9 +49,11 @@ GOOGLE = {"items": [
     {"id": "lecture000", "volumeInfo": {"title": "Livre en aperçu seulement"}, "accessInfo": {"viewability": "PARTIAL", "epub": {"isAvailable": False}, "pdf": {"isAvailable": False}}}
 ]}
 
+MODE = {'google_429': False, 'download_429': False}
+
 def proxy_body(url):
     if 'gutendex' in url: return json.dumps(GUTENDEX).encode(), 'application/json'
-    if 'books.google' in url: return EPUB, 'application/epub+zip'
+    if 'books.google' in url: return (b'Too Many Requests' * 10, 'text/plain') if MODE['download_429'] else (EPUB, 'application/epub+zip')
     return BOOK.encode('utf-8'), 'text/plain; charset=utf-8'
 
 def routes(page):
@@ -62,7 +65,8 @@ def routes(page):
     page.route('https://corsproxy.io/**', lambda r: r.fulfill(
         body=proxy_body(r.request.url)[0], content_type=proxy_body(r.request.url)[1],
         headers={'access-control-allow-origin': '*'}))
-    page.route('https://www.googleapis.com/**', lambda r: r.fulfill(body=json.dumps(GOOGLE), content_type='application/json', headers={'access-control-allow-origin': '*'}))
+    page.route('https://www.googleapis.com/**', lambda r: r.fulfill(status=429, body='{"error":{"code":429}}', content_type='application/json', headers={'access-control-allow-origin': '*'}) if MODE['google_429'] else r.fulfill(body=json.dumps(GOOGLE), content_type='application/json', headers={'access-control-allow-origin': '*'}))
+    page.route('http://localhost:8765/api/google-books**', lambda r: r.fulfill(status=429, body='{"error":"quota"}', content_type='application/json') if MODE['google_429'] else r.fulfill(body=json.dumps(GOOGLE), content_type='application/json'))
     page.route('https://books.google.com/**', lambda r: r.abort())
     page.route('https://www.gutenberg.org/**', lambda r: r.abort())
     page.route('https://api.allorigins.win/**', lambda r: r.abort())
@@ -204,9 +208,23 @@ with sync_playwright() as p:
     page.keyboard.press('Escape')
     page.click('#btnSettings'); page.uncheck('#sMusic'); page.keyboard.press('Escape')
 
+    print('Google Livres : quota dépassé (429)')
+    MODE['google_429'] = True
+    page.click('#btnGutenberg')
+    page.click('#tabGoogle')
+    page.fill('#gQuery', 'Candide'); page.click('#gForm button[type=submit]')
+    page.wait_for_selector('#gResults >> text=erreur 429', timeout=20000)
+    check(True, 'message clair quand Google refuse (429)')
+    page.click('#gResults >> text=Chercher sur Project Gutenberg')
+    page.wait_for_selector('#gResults li button >> text=Candide', timeout=15000)
+    check(page.locator('#tabGutenberg').get_attribute('aria-selected') == 'true', 'bascule en un clic vers Gutenberg, même recherche')
+    page.keyboard.press('Escape')
+    MODE['google_429'] = False
+
     print('Google Livres')
     page.click('#btnGutenberg')
     page.click('#tabGoogle')
+    page.fill('#gQuery', 'Voltaire'); page.click('#gForm button[type=submit]')
     page.wait_for_selector('#gResults li button >> text=Candide', timeout=15000)
     check(page.locator('#gResults li button').count() == 1, 'seuls les livres téléchargeables sont proposés')
     page.locator('#gResults li button').first.click()
@@ -218,6 +236,19 @@ with sync_playwright() as p:
     check(page.locator('#readerTitle').inner_text() == 'Candide', 'livre Google ouvert')
     check('Westphalie' in page.locator('#context').inner_text() or 'Chapitre' in page.locator('#context').inner_text(), 'texte Google extrait')
     page.keyboard.press('Escape')
+
+    print('Google Livres : téléchargement refusé → même livre sur Gutenberg')
+    page.evaluate("indexedDB.deleteDatabase && null")
+    page.evaluate("(async () => { const r = indexedDB.open('rsvp-reader'); await new Promise(ok => r.onsuccess = ok); const db = r.result; await new Promise(ok => { const t = db.transaction(['books','texts'], 'readwrite'); t.objectStore('books').delete('gb_abc123XYZ_0'); t.objectStore('texts').delete('gb_abc123XYZ_0'); t.oncomplete = ok; }); })()")
+    MODE['download_429'] = True
+    page.click('#btnGutenberg')
+    page.click('#tabGoogle')
+    page.wait_for_selector('#gResults li button >> text=Candide', timeout=15000)
+    page.locator('#gResults li button').first.click()
+    page.wait_for_selector('#reader:not([hidden])', timeout=40000)
+    check('Gutenberg' in page.locator('#toast').inner_text(), 'version Gutenberg utilisée automatiquement')
+    page.keyboard.press('Escape')
+    MODE['download_429'] = False
 
     print('Liens Amazon / fichiers protégés')
     page.click('#btnUrl')

@@ -8,12 +8,10 @@
 
 import { extractAny, extractHtmlString, decodeBytes, ExtractError } from './extract.js';
 import { textFromPlain } from './text.js';
-import { GOOGLE_BOOKS_API_KEY } from './config.js';
 
 const SAME_ORIGIN_PROXIES = [
     { host: /^(www\.)?gutenberg\.org$/i, prefix: '/proxy/gutenberg' },
     { host: /^gutendex\.com$/i, prefix: '/proxy/gutendex' },
-    { host: /^www\.googleapis\.com$/i, prefix: '/proxy/googleapis', directFirst: true },   // l'API accepte le CORS
     { host: /^books\.google\.[a-z.]+$/i, prefix: '/proxy/googlebooks' }
 ];
 
@@ -52,22 +50,41 @@ async function fetchWithTimeout(url, ms, signal) {
  * Télécharge `url` en essayant toutes les routes. `validate(bytes)` peut rejeter une réponse
  * (page d'erreur d'un proxy, fichier vide…) pour passer à la route suivante.
  */
-export async function fetchBytes(url, { timeout = 25000, validate, signal } = {}) {
+export class RateLimitError extends Error {}
+
+const sleep = (ms, signal) => new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Annulé', 'AbortError')); }, { once: true });
+});
+
+export async function fetchBytes(url, { timeout = 25000, validate, signal, routes } = {}) {
     let lastError = null;
-    for (const route of routesFor(url)) {
-        if (signal && signal.aborted) throw new DOMException('Annulé', 'AbortError');
-        try {
-            const res = await fetchWithTimeout(route, timeout, signal);
-            if (!res.ok) { lastError = new Error('HTTP ' + res.status); continue; }
-            const bytes = new Uint8Array(await res.arrayBuffer());
-            if (bytes.length < 64) { lastError = new Error('Réponse vide'); continue; }
-            if (validate && !validate(bytes)) { lastError = new Error('Réponse invalide'); continue; }
-            return { bytes, contentType: res.headers.get('content-type') || '' };
-        } catch (e) {
-            if (signal && signal.aborted) throw e;
-            lastError = e;
+    let rateLimited = false;
+    for (const route of routes || routesFor(url)) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (signal && signal.aborted) throw new DOMException('Annulé', 'AbortError');
+            try {
+                const res = await fetchWithTimeout(route, timeout, signal);
+                if (res.status === 429) {
+                    // Trop de requêtes : une seconde chance après une courte pause, puis route suivante
+                    rateLimited = true;
+                    lastError = new Error('HTTP 429');
+                    if (attempt === 0) { await sleep(Math.min(3, Number(res.headers.get('retry-after')) || 1.5) * 1000, signal); continue; }
+                    break;
+                }
+                if (!res.ok) { lastError = new Error('HTTP ' + res.status); break; }
+                const bytes = new Uint8Array(await res.arrayBuffer());
+                if (bytes.length < 64) { lastError = new Error('Réponse vide'); break; }
+                if (validate && !validate(bytes)) { lastError = new Error('Réponse invalide'); break; }
+                return { bytes, contentType: res.headers.get('content-type') || '' };
+            } catch (e) {
+                if (signal && signal.aborted) throw e;
+                lastError = e;
+                break;
+            }
         }
     }
+    if (rateLimited) throw new RateLimitError('Google limite temporairement le nombre de requêtes (erreur 429).');
     throw new Error('Téléchargement impossible (' + (lastError ? lastError.message : 'réseau') + ')');
 }
 
@@ -175,38 +192,79 @@ export async function downloadGutenberg(book, { signal, onStatus } = {}) {
 
 // ---------------------------------------------------------------------------------------------
 // Google Livres : ouvrages en accès libre et intégral (domaine public), téléchargeables en EPUB/PDF
+//
+// Les recherches passent d'abord par le relais du site (/api/google-books, fonction Netlify) qui
+// ajoute la clé d'API côté serveur et met les réponses en cache 24 h : c'est ce qui évite l'erreur
+// 429 de Google. Hors Netlify, ou si le relais est saturé, l'appareil interroge Google directement
+// (son propre quota, distinct de celui du serveur). Les résultats sont aussi gardés 24 h sur
+// l'appareil : rouvrir une recherche ne coûte rien.
 // ---------------------------------------------------------------------------------------------
 
-export async function searchGoogleBooks(query, lang, { signal } = {}) {
-    const params = new URLSearchParams({
-        q: query || (lang === 'en' ? 'classic novel' : 'roman'),
-        filter: 'free-ebooks', printType: 'books', maxResults: '40', orderBy: 'relevance'
-    });
-    if (lang) params.set('langRestrict', lang);
-    if (GOOGLE_BOOKS_API_KEY && !GOOGLE_BOOKS_API_KEY.startsWith('__')) params.set('key', GOOGLE_BOOKS_API_KEY);
-    const { bytes } = await fetchBytes('https://www.googleapis.com/books/v1/volumes?' + params, {
-        timeout: 15000, signal, validate: b => decodeBytes(b.subarray(0, 64)).trimStart().startsWith('{')
-    });
-    const data = JSON.parse(decodeBytes(bytes));
-    const out = [];
-    for (const item of data.items || []) {
-        const v = item.volumeInfo || {}, a = item.accessInfo || {};
-        const epub = a.epub && a.epub.isAvailable && a.epub.downloadLink;
-        const pdf = a.pdf && a.pdf.isAvailable && a.pdf.downloadLink;
-        if (!epub && !pdf) continue;
-        out.push({
-            id: item.id,
-            title: [v.title, v.subtitle].filter(Boolean).join(' — ') || 'Sans titre',
-            author: (v.authors || []).join(', '),
-            year: (v.publishedDate || '').slice(0, 4),
-            epub: epub ? httpsGoogle(epub) : '',
-            pdf: pdf ? httpsGoogle(pdf) : ''
-        });
+const GB_CACHE_KEY = 'rsvp2_google_cache';
+const GB_CACHE_MS = 24 * 3600 * 1000;
+
+function cacheGet(key) {
+    try {
+        const all = JSON.parse(localStorage.getItem(GB_CACHE_KEY) || '{}');
+        const hit = all[key];
+        return hit && Date.now() - hit.t < GB_CACHE_MS ? hit.data : null;
+    } catch { return null; }
+}
+
+function cachePut(key, data) {
+    try {
+        const all = JSON.parse(localStorage.getItem(GB_CACHE_KEY) || '{}');
+        all[key] = { t: Date.now(), data };
+        const keys = Object.keys(all).sort((x, y) => all[y].t - all[x].t);
+        for (const k of keys.slice(40)) delete all[k];
+        localStorage.setItem(GB_CACHE_KEY, JSON.stringify(all));
+    } catch { /* stockage plein : sans cache */ }
+}
+
+const isJson = b => decodeBytes(b.subarray(0, 64)).trimStart().startsWith('{');
+
+/** Appelle l'API Google Books (relais du site, puis accès direct). params : { q, lang } ou { id }. */
+async function googleApi(params, signal) {
+    const cacheKey = JSON.stringify(params);
+    const cached = cacheGet(cacheKey);
+    if (cached) return cached;
+
+    const routes = [];
+    if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) {
+        routes.push('/api/google-books?' + new URLSearchParams(params));
     }
-    return out;
+    if (params.id) {
+        routes.push(`https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(params.id)}`);
+    } else {
+        const p = new URLSearchParams({ q: params.q, filter: 'free-ebooks', printType: 'books', maxResults: '40', orderBy: 'relevance' });
+        if (params.lang) p.set('langRestrict', params.lang);
+        routes.push('https://www.googleapis.com/books/v1/volumes?' + p);
+    }
+    const { bytes } = await fetchBytes(routes[routes.length - 1], { routes, signal, timeout: 15000, validate: isJson });
+    const data = JSON.parse(decodeBytes(bytes));
+    cachePut(cacheKey, data);
+    return data;
 }
 
 const httpsGoogle = url => url.replace(/^http:/, 'https:').replace(/books\.google\.[a-z.]+\//, 'books.google.com/');
+
+function toBook(item) {
+    const v = item.volumeInfo || {}, a = item.accessInfo || {};
+    return {
+        id: item.id,
+        title: [v.title, v.subtitle].filter(Boolean).join(' — ') || 'Sans titre',
+        author: (v.authors || []).join(', '),
+        year: (v.publishedDate || '').slice(0, 4),
+        epub: a.epub && a.epub.isAvailable && a.epub.downloadLink ? httpsGoogle(a.epub.downloadLink) : '',
+        pdf: a.pdf && a.pdf.isAvailable && a.pdf.downloadLink ? httpsGoogle(a.pdf.downloadLink) : '',
+        free: /ALL_PAGES/.test(a.viewability || '') || !!a.publicDomain
+    };
+}
+
+export async function searchGoogleBooks(query, lang, { signal } = {}) {
+    const data = await googleApi({ q: query || (lang === 'en' ? 'classic novel' : 'roman'), lang: lang || '' }, signal);
+    return (data.items || []).map(toBook).filter(b => b.epub || b.pdf);
+}
 
 export async function downloadGoogleBook(book, { signal, onStatus } = {}) {
     const candidates = [book.epub && { url: book.epub, kind: 'EPUB' }, book.pdf && { url: book.pdf, kind: 'PDF' }].filter(Boolean);
@@ -225,7 +283,32 @@ export async function downloadGoogleBook(book, { signal, onStatus } = {}) {
             lastError = e;
         }
     }
+    // Google bloque souvent les téléchargements en série (429) : la plupart des livres libres de
+    // Google existent aussi chez Project Gutenberg, on y cherche automatiquement le même titre.
+    if (onStatus) onStatus('Google ne répond pas, recherche du même livre sur Project Gutenberg…');
+    const twin = await findOnGutenberg(book, signal).catch(() => null);
+    if (twin) {
+        const result = await downloadGutenberg(twin, { signal, onStatus });
+        return { ...result, fallback: 'gutenberg', gutenbergId: twin.id };
+    }
+    if (lastError instanceof RateLimitError) throw lastError;
     throw new Error('Google Livres n’a pas fourni ce livre. ' + (lastError ? lastError.message : ''));
+}
+
+const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Cherche sur Project Gutenberg le même livre (titre principal + nom de l'auteur). */
+export async function findOnGutenberg(book, signal) {
+    const mainTitle = norm((book.title || '').split(/ — |[:;(]/)[0]);
+    if (mainTitle.length < 3) return null;
+    const lastName = norm((book.author || '').split(',')[0]).split(' ').pop() || '';
+    const results = await searchGutenberg([mainTitle, lastName].filter(Boolean).join(' '), '', { signal });
+    return results.find(r => {
+        const t = norm(r.title);
+        return (t.startsWith(mainTitle) || mainTitle.startsWith(t.split(' ').slice(0, 4).join(' ')))
+            && (!lastName || norm(r.author).includes(lastName));
+    }) || null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -260,16 +343,8 @@ export async function importFromUrl(rawUrl, { signal, onStatus } = {}) {
 
 /** Livre Google Livres à partir de son identifiant (lien partagé). */
 export async function importGoogleVolume(id, { signal, onStatus } = {}) {
-    const key = GOOGLE_BOOKS_API_KEY && !GOOGLE_BOOKS_API_KEY.startsWith('__') ? '?key=' + GOOGLE_BOOKS_API_KEY : '';
-    const { bytes } = await fetchBytes(`https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(id)}${key}`, { signal, timeout: 15000 });
-    const item = JSON.parse(decodeBytes(bytes));
-    const v = item.volumeInfo || {}, a = item.accessInfo || {};
-    const book = {
-        id, title: v.title || 'Sans titre', author: (v.authors || []).join(', '),
-        epub: a.epub && a.epub.isAvailable && a.epub.downloadLink ? httpsGoogle(a.epub.downloadLink) : '',
-        pdf: a.pdf && a.pdf.isAvailable && a.pdf.downloadLink ? httpsGoogle(a.pdf.downloadLink) : ''
-    };
-    if ((!book.epub && !book.pdf) || (!/ALL_PAGES/.test(a.viewability || '') && !a.publicDomain)) {
+    const book = toBook(await googleApi({ id }, signal));
+    if ((!book.epub && !book.pdf) || !book.free) {
         throw new ExtractError('Ce livre Google n’est pas en accès libre. Si vous l’avez acheté, exportez-le depuis play.google.com/books (Plus › Exporter › EPUB) puis importez le fichier.');
     }
     return downloadGoogleBook(book, { signal, onStatus });
