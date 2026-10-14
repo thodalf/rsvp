@@ -3,6 +3,7 @@
 #   cd tests && python3 ui_test.py   (après `node ../build.js`)
 import io, json, os, subprocess, sys, time, pathlib, zipfile
 os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', '/opt/pw-browsers')
+os.environ.setdefault('PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS', '1')  # le SW passe aussi par les routes simulées
 from playwright.sync_api import sync_playwright
 
 HERE = pathlib.Path(__file__).parent
@@ -74,7 +75,7 @@ with sync_playwright() as p:
     page = ctx.new_page()
     page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
     page.on('pageerror', lambda e: errors.append(str(e)))
-    routes(page)
+    routes(ctx)
 
     print('Migration de l’ancienne version')
     page.goto('http://localhost:8765/')
@@ -209,7 +210,11 @@ with sync_playwright() as p:
     page.wait_for_selector('#gResults li button >> text=Candide', timeout=15000)
     check(page.locator('#gResults li button').count() == 1, 'seuls les livres téléchargeables sont proposés')
     page.locator('#gResults li button').first.click()
-    page.wait_for_selector('#reader:not([hidden])', timeout=20000)
+    try:
+        page.wait_for_selector('#reader:not([hidden])', timeout=20000)
+    except Exception:
+        print('    toast :', page.locator('#toast').inner_text(), page.locator('#busyMsg').inner_text())
+        raise
     check(page.locator('#readerTitle').inner_text() == 'Candide', 'livre Google ouvert')
     check('Westphalie' in page.locator('#context').inner_text() or 'Chapitre' in page.locator('#context').inner_text(), 'texte Google extrait')
     page.keyboard.press('Escape')
@@ -232,7 +237,7 @@ with sync_playwright() as p:
     m = browser.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, color_scheme='light')
     mp = m.new_page()
     mp.on('pageerror', lambda e: errors.append(str(e)))
-    routes(mp)
+    routes(m)
     mp.goto('http://localhost:8765/')
     mp.evaluate("localStorage.clear()")
     mp.reload()

@@ -72,6 +72,28 @@ officiel de Gutenberg.
 - Raccourcis : `Espace` lire/pause, `←` `→` phrase, `Maj`+`←` `→` mot, `↑` `↓` vitesse, `F` plein
   écran, `Échap` retour. Mobile : toucher pour lire/pause, glisser pour changer de phrase.
 
+## Webapp
+
+L'application s'installe comme une app native et s'ouvre en plein écran, sans barre de navigateur :
+
+- **Android / ordinateur (Chrome, Edge)** : bouton **Installer** en haut de la bibliothèque.
+- **iPhone / iPad** : le bouton **Installer** affiche la marche à suivre (Safari › Partager › Sur
+  l'écran d'accueil), Apple ne permettant pas d'installation en un clic.
+
+Une fois installée :
+
+- **Hors ligne** : l'application, les livres importés et l'import de PDF/EPUB (pdf.js et JSZip mis
+  en cache dès l'installation) fonctionnent sans connexion ; un badge « Hors ligne » l'indique.
+- **Partager vers Lecture** (Android) : un PDF, un EPUB, un texte ou un lien partagé depuis une autre
+  app s'ouvre directement dans le lecteur.
+- **Ouvrir avec Lecture** (ordinateur) : les fichiers PDF, EPUB, TXT et HTML peuvent s'ouvrir
+  directement avec l'app.
+- **Raccourcis** (appui long sur l'icône) : Reprendre la lecture, Classiques gratuits, Coller un texte.
+- **Mises à jour** : téléchargées en arrière-plan et appliquées au retour à la bibliothèque, jamais
+  au milieu d'une lecture.
+
+Icônes : `tests/make_icons.py` ; captures d'écran de la fiche d'installation : `tests/make_screens.py`.
+
 ## Stockage et synchronisation
 
 - Les livres sont stockés dans **IndexedDB** (aucune limite pratique, contrairement au
@@ -96,8 +118,10 @@ js/extract.js     extraction PDF / EPUB / HTML / TXT
 js/sources.js     Gutenberg, Google Livres et import par lien
 js/store.js       IndexedDB, réglages, reprise de l'ancienne version
 js/cloud.js       synchronisation Firebase (facultative)
+js/pwa.js         installation, mises à jour, partage, ouverture de fichiers, hors ligne
 js/config.js      configuration Firebase (remplie par build.js)
-sw.js             service worker (hors ligne)
+sw.js             service worker (hors ligne, partage, mises à jour)
+screens/          captures affichées lors de l'installation
 build.js          build Netlify → dist/
 tests/            tests de la chaîne texte (Node) et de bout en bout (Chromium)
 ```
@@ -122,4 +146,5 @@ Google Livres utilise le quota anonyme de Google, suffisant pour un usage person
 cd tests && npm install
 node run.mjs          # extraction et découpage (PDF, EPUB, HTML, Gutenberg, encodages)
 python3 make_pdf.py sample.pdf && python3 ui_test.py   # parcours complet dans Chromium (Playwright)
+python3 pwa_test.py   # webapp : manifeste, hors ligne, partage de fichiers, raccourcis, installation iPhone
 ```

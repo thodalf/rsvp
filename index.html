@@ -7,10 +7,13 @@
     <meta name="description" content="Liseuse de lecture rapide (RSVP) : PDF, EPUB, textes, articles et livres libres du Project Gutenberg.">
     <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Lecture">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Lecture rapide">
+    <meta name="apple-mobile-web-app-title" content="Lecture">
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
     <link rel="apple-touch-icon" href="icons/icon-180.png">
     <link rel="stylesheet" href="css/app.css">
@@ -39,6 +42,8 @@
         <symbol id="i-paste" viewBox="0 0 24 24"><path d="M9 4h6v3H9zM9 5.5H6.5A1.5 1.5 0 0 0 5 7v12.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H15M8.5 12h7M8.5 16h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></symbol>
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></symbol>
         <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10.5a4 4 0 0 0 .4-8A6 6 0 0 0 6.3 9.6 4.2 4.2 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+        <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     </svg>
 
@@ -46,7 +51,11 @@
     <main id="library" class="screen library">
         <header class="lib-header">
             <h1 class="brand">Lecture<span>rapide</span></h1>
-            <button class="icon-btn" id="btnSettings" aria-label="Réglages"><svg><use href="#i-settings"/></svg></button>
+            <div class="header-actions">
+                <span class="offline-pill" id="offlinePill" hidden>Hors ligne</span>
+                <button class="install-btn" id="btnInstall" hidden><svg><use href="#i-download"/></svg><span>Installer</span></button>
+                <button class="icon-btn" id="btnSettings" aria-label="Réglages"><svg><use href="#i-settings"/></svg></button>
+            </div>
         </header>
 
         <section id="resume" class="resume" hidden>
@@ -325,6 +334,19 @@
                 <p class="sheet-note">Sur mobile : toucher l’écran pour lire ou mettre en pause, glisser à gauche ou à droite pour changer de phrase.</p>
             </fieldset>
         </div>
+    </dialog>
+
+    <dialog id="dlgInstall" class="sheet small" aria-labelledby="iTitle">
+        <header class="sheet-head">
+            <h2 id="iTitle">Installer sur l’iPhone / l’iPad</h2>
+            <button class="icon-btn" data-close aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+        </header>
+        <ol class="install-steps">
+            <li>Ouvrez ce site dans <strong>Safari</strong>.</li>
+            <li>Touchez le bouton <strong>Partager</strong> <svg class="inline-ico"><use href="#i-share"/></svg> en bas de l’écran.</li>
+            <li>Choisissez <strong>Sur l’écran d’accueil</strong>, puis <strong>Ajouter</strong>.</li>
+        </ol>
+        <p class="sheet-note install-note">L’application s’ouvre ensuite en plein écran, sans barre de navigateur, et fonctionne hors ligne.</p>
     </dialog>
 
     <dialog id="dlgConfirm" class="sheet small" aria-labelledby="cTitle">

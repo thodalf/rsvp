@@ -13,7 +13,7 @@ const VARS = ['API_KEY', 'AUTH_DOMAIN', 'PROJECT_ID', 'STORAGE_BUCKET', 'MESSAGI
 
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
-for (const entry of ['index.html', 'manifest.json', 'sw.js', 'css', 'js', 'icons']) {
+for (const entry of ['index.html', 'manifest.json', 'sw.js', 'css', 'js', 'icons', 'screens']) {
     fs.cpSync(path.join(ROOT, entry), path.join(OUT, entry), { recursive: true });
 }
 

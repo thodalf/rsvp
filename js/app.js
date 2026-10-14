@@ -8,6 +8,7 @@ import { Ambience } from './ambience.js';
 import { store, textId, loadSettings, saveSettings, migrateLegacy } from './store.js';
 import { RsvpEngine } from './engine.js';
 import * as cloud from './cloud.js';
+import { initPwa } from './pwa.js';
 
 const $ = id => document.getElementById(id);
 
@@ -359,7 +360,9 @@ async function runGutenbergSearch() {
         }
     } catch (e) {
         if (signal.aborted) return;
-        ul.replaceChildren(h('li', { class: 'status' }, 'Le catalogue ne répond pas. Vérifiez votre connexion puis réessayez.'));
+        ul.replaceChildren(h('li', { class: 'status' }, navigator.onLine
+            ? 'Le catalogue ne répond pas pour le moment. Réessayez dans un instant.'
+            : 'Vous êtes hors ligne : la recherche de livres nécessite une connexion.'));
     }
 }
 
@@ -399,6 +402,7 @@ async function submitUrl(e) {
     e.preventDefault();
     const url = $('uInput').value;
     $('dlgUrl').close();
+    if (!navigator.onLine) { toast('Vous êtes hors ligne : l’import par lien nécessite une connexion.', { error: true }); return; }
     const b = busy('Import du lien…');
     try {
         const result = await importFromUrl(url, { signal: b.signal, onStatus: b.status });
@@ -481,6 +485,7 @@ async function closeReader() {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     showScreen('library');
     renderLibrary();
+    window.dispatchEvent(new Event('rsvp:library'));
 }
 
 function showScreen(name) {
@@ -538,7 +543,7 @@ function renderPaused() {
 
     const pct = engine.ratio * 100;
     $('seek').value = Math.round(engine.ratio * 1000);
-    $('pct').textContent = (pct < 10 && pct > 0 ? pct.toFixed(1) : Math.round(pct)) + ' %';
+    $('pct').textContent = (pct >= 0.05 && pct < 10 ? pct.toFixed(1).replace('.', ',') : Math.round(pct)) + ' %';
     $('remaining').textContent = 'encore ' + formatDuration(engine.remainingMs());
     $('wpmOut').textContent = engine.effectiveWpm;
     $('moodChip').hidden = !settings.music;
@@ -774,12 +779,6 @@ function bindLibrary() {
         const f = e.dataTransfer.files[0];
         if (f && $('reader').hidden) importFile(f);
     });
-
-    // Partage vers l'app (Android : "Partager → Lecture rapide") via ?url= / ?text=
-    const q = new URLSearchParams(location.search);
-    const sharedUrl = q.get('url') || (/^https?:\/\//.test(q.get('text') || '') ? q.get('text') : '');
-    if (sharedUrl) { $('uInput').value = sharedUrl; history.replaceState(null, '', location.pathname); $('uForm').requestSubmit(); }
-    else if (q.get('text')) { $('pText').value = q.get('text'); $('pTitleInput').value = q.get('title') || ''; history.replaceState(null, '', location.pathname); $('dlgPaste').showModal(); }
 }
 
 async function main() {
@@ -814,9 +813,24 @@ async function main() {
         });
     }
 
-    if ('serviceWorker' in navigator && location.protocol === 'https:') {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
-    }
+    initPwa({
+        onFile: file => { if (current) closeReader().then(() => importFile(file)); else importFile(file); },
+        onAction: async action => {
+            if (action === 'classics') $('btnGutenberg').click();
+            else if (action === 'paste') $('btnPaste').click();
+            else if (action === 'resume') {
+                const book = (await store.listBooks()).find(b => b.lastReadAt && (b.ratio || 0) < 0.995);
+                if (book) openBook(book.id); else toast('Aucune lecture en cours.');
+            }
+        },
+        onShared: ({ title, text, url }) => {
+            const link = url || (/^https?:\/\/\S+$/.test(text.trim()) ? text.trim() : '');
+            if (link) { $('uInput').value = link; $('uForm').requestSubmit(); }
+            else { $('pText').value = text; $('pTitleInput').value = title; $('dlgPaste').showModal(); }
+        },
+        isReading: () => !!current,
+        toast
+    });
 }
 
 main();

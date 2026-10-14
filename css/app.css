@@ -87,6 +87,24 @@ svg { width: 22px; height: 22px; flex: none; }
     padding: calc(12px + var(--safe-t)) 16px calc(48px + var(--safe-b));
 }
 .lib-header { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+.header-actions { display: flex; align-items: center; gap: 6px; }
+.install-btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 10px;
+    border-radius: 999px; border: 0; background: var(--accent); color: var(--accent-fg); font-weight: 650; font-size: .88rem;
+}
+.install-btn svg { width: 18px; height: 18px; }
+.offline-pill { font-size: .75rem; font-weight: 650; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.install-steps { margin: 0; padding: 4px 20px 0 44px; display: grid; gap: 10px; }
+.install-note { padding: 12px 20px 20px; }
+.inline-ico { width: 18px; height: 18px; vertical-align: -3px; color: var(--accent); }
+@media (max-width: 340px) { .install-btn span { display: none; } .install-btn { padding: 0 9px; } }
+
+/* Une fois installée : comportement d'app native */
+html.standalone body { overscroll-behavior: none; }
+html.standalone .hint { display: none; }
+.reader { overscroll-behavior: none; }
+.chrome, .controls, .lib-header { -webkit-user-select: none; user-select: none; }
+
 .brand { margin: 0; font-size: 1.35rem; letter-spacing: -.02em; font-weight: 750; }
 .brand span { color: var(--accent); margin-left: .28em; font-weight: 750; }
 
