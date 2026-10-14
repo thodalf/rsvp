@@ -1,38 +1,59 @@
 {
-    "name": "Liseuse RSVP",
-    "short_name": "RSVP Reader",
-    "description": "Lecture rapide (RSVP) de livres PDF, Project Gutenberg et Google Books",
-    "start_url": ".",
-    "scope": ".",
-    "display": "standalone",
-    "orientation": "portrait-primary",
-    "background_color": "#6c5ce7",
-    "theme_color": "#6c5ce7",
+    "id": "./",
+    "name": "Lecture rapide",
+    "short_name": "Lecture",
+    "description": "Liseuse de lecture rapide (RSVP) : PDF, EPUB, textes, articles et livres gratuits, mot par mot.",
     "lang": "fr",
+    "dir": "ltr",
+    "start_url": "./?source=pwa",
+    "scope": "./",
+    "display": "standalone",
+    "display_override": ["standalone", "minimal-ui"],
+    "orientation": "any",
+    "background_color": "#121212",
+    "theme_color": "#121212",
+    "categories": ["books", "education", "productivity"],
+    "prefer_related_applications": false,
     "icons": [
+        { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+        { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+        { "src": "icons/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    ],
+    "screenshots": [
+        { "src": "screens/lecture-mobile.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Un mot à la fois, aligné sur sa lettre de fixation" },
+        { "src": "screens/bibliotheque-mobile.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Votre bibliothèque et la reprise de lecture" },
+        { "src": "screens/lecture-large.png", "sizes": "1440x900", "type": "image/png", "form_factor": "wide", "label": "Lecture plein écran sur ordinateur" }
+    ],
+    "shortcuts": [
+        { "name": "Reprendre la lecture", "short_name": "Reprendre", "url": "./?action=resume", "icons": [{ "src": "icons/shortcut-read.png", "sizes": "96x96", "type": "image/png" }] },
+        { "name": "Classiques gratuits", "short_name": "Classiques", "url": "./?action=classics", "icons": [{ "src": "icons/shortcut-read.png", "sizes": "96x96", "type": "image/png" }] },
+        { "name": "Coller un texte", "short_name": "Coller", "url": "./?action=paste", "icons": [{ "src": "icons/shortcut-read.png", "sizes": "96x96", "type": "image/png" }] }
+    ],
+    "file_handlers": [
         {
-            "src": "icons/icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "any"
-        },
-        {
-            "src": "icons/icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any"
-        },
-        {
-            "src": "icons/icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "maskable"
-        },
-        {
-            "src": "icons/icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "maskable"
+            "action": "./?action=open-file",
+            "accept": {
+                "application/pdf": [".pdf"],
+                "application/epub+zip": [".epub"],
+                "text/plain": [".txt", ".text", ".md"],
+                "text/html": [".html", ".htm"]
+            },
+            "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }],
+            "launch_type": "single-client"
         }
-    ]
+    ],
+    "share_target": {
+        "action": "./share-target",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url",
+            "files": [{ "name": "file", "accept": ["application/pdf", ".pdf", "application/epub+zip", ".epub", "text/plain", ".txt", "text/html", ".html"] }]
+        }
+    },
+    "launch_handler": { "client_mode": ["navigate-existing", "auto"] }
 }

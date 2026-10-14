@@ -3,7 +3,7 @@
 L'application intègre Firebase pour la page de connexion (Google + e-mail/mot
 de passe) et la synchronisation cloud des livres et de la progression de
 lecture. Tant que Firebase n'est pas configuré, l'app continue de fonctionner
-normalement en local (`localStorage`) — seule la connexion/synchronisation
+normalement en local (IndexedDB du navigateur) — seule la connexion/synchronisation
 est indisponible.
 
 Seuls **Authentication** et **Firestore** sont utilisés (plan gratuit
@@ -43,7 +43,7 @@ la config, il est sans effet.)
 
 ## 3. Renseigner la config — recommandé : variables d'environnement Netlify
 
-`index.html` ne contient **pas** la config Firebase en clair : elle est
+`js/config.js` ne contient **pas** la config Firebase en clair : elle est
 remplacée au moment du build à partir de variables d'environnement, pour ne
 jamais committer de clés dans le dépôt Git.
 
@@ -60,7 +60,7 @@ Dans **Netlify > Site settings > Environment variables**, ajoutez :
 
 Le site doit être déployé via **Netlify relié à votre dépôt Git** (Import an
 existing project), pas via Netlify Drop : `netlify.toml` déclenche
-automatiquement `node build.js`, qui publie `dist/index.html` avec les jetons
+automatiquement `node build.js`, qui publie `dist/` avec les jetons
 `__FIREBASE_...__` remplacés par ces variables. Sans ces variables, le build
 réussit quand même mais Firebase reste désactivé (voir la console du
 navigateur).
@@ -73,11 +73,11 @@ FIREBASE_STORAGE_BUCKET=... FIREBASE_MESSAGING_SENDER_ID=... FIREBASE_APP_ID=...
 node build.js
 ```
 
-puis servez `dist/index.html` (ex. `npx serve dist`).
+puis servez le dossier `dist/` (ex. `npx serve dist`).
 
 **Alternative** (GitHub Pages, Netlify Drop, hébergement statique sans
-build) : ouvrez `index.html`, cherchez le bloc `<script type="module">` et
-remplacez directement les valeurs `"__FIREBASE_...__"` par votre config.
+build) : ouvrez `js/config.js` et remplacez directement les valeurs
+`'__FIREBASE_...__'` par votre config.
 
 ## 4. Activer l'authentification
 
@@ -118,40 +118,36 @@ service cloud.firestore {
 ## 6. Structure des données
 
 ```
-users/{uid}/books/{bookId}       → { id, title, author, addedDate, lastModified, hasPdf }
-users/{uid}/bookFiles/{bookId}   → { pdfData: Bytes }   (le PDF lui-même)
-users/{uid}/progress/{bookId}    → { bookId, wordIndex, totalWords, lastUpdate }
-users/{uid}/settings/reader      → { wpm, maxWordLength, autoSpeedEnabled, pauseOnPunctuation,
-                                      pauseOnProperNoun, pausePunctuationMultiplier,
-                                      pauseProperNounMultiplier, ambientMusicEnabled, lastModified }
+users/{uid}/settings/reader      → { wpm, pauses, maxLen, fontScale, font, theme, guide, progressLine, rampUp, updatedAt }
+users/{uid}/books/{bookId}       → { id, title, author, source, addedAt, chars, words, textChunks, gz, updatedAt }
+users/{uid}/bookText/{bookId}__{n} → { data: Bytes, i, n, gz }   (texte compressé gzip, découpé en morceaux de 700 Ko)
+users/{uid}/progress/{bookId}    → { position, ratio, updatedAt }
 ```
 
-Le PDF est séparé de la fiche livre (`books/{bookId}`) pour que consulter la
-liste des livres n'ait pas à retélécharger tous les PDF.
+On ne stocke plus de PDF : seulement le **texte extrait**, compressé. Un roman
+entier pèse ainsi 200 à 500 Ko au lieu de plusieurs Mo, et la limite de 1 Mo
+par document Firestore ne pose plus de problème (le texte est découpé en
+plusieurs documents si besoin). Tous les livres sont donc synchronisés, quelle
+que soit leur taille.
 
-⚠️ Firestore limite un document à 1 Mo. Un PDF de plus de ~900 Ko n'est **pas**
-envoyé vers Firestore : le livre reste alors disponible localement sur
-l'appareil courant uniquement (`hasPdf: false`, message dans la console du
-navigateur). Pour de gros ouvrages, c'est une limite du plan gratuit — il n'y
-a pas de solution de contournement sans passer par un service de stockage de
-fichiers payant.
+**Compatibilité avec l'ancienne version** : les livres déjà enregistrés sous
+l'ancien format (`books/{id}` avec `hasPdf`, PDF dans `bookFiles/{id}`, progression
+en `wordIndex/totalWords`) apparaissent toujours dans la bibliothèque. À leur
+première ouverture, le PDF est relu, son texte extrait, puis réenregistré au
+nouveau format.
 
-## 7. Fonctionnement du mode hors-ligne / sans compte
+## 7. Fonctionnement hors ligne / sans compte
 
-- Sans connexion : tout est stocké dans `localStorage` du navigateur, comme
-  avant.
-- À l'ouverture d'un livre (import PDF, Gutenberg, Google Books, reprise) :
-  s'il n'a encore jamais été synchronisé, il est converti en PDF (ou le PDF
-  original est réutilisé pour un import direct) et enregistré dans Firestore,
-  en tâche de fond, sans bloquer la lecture.
-- À la connexion : les paramètres de lecture (vitesse, longueur max, pauses,
-  musique) sont fusionnés en premier (le plus récent l'emporte, `lastModified`
-  à l'appui), puis les livres présents côté cloud mais absents de cet
-  appareil sont récupérés et leur texte ré-extrait, et les progressions
-  distantes et locales sont fusionnées de la même façon ; les livres locaux
-  absents du cloud y sont poussés.
-- Chaque changement de réglage (vitesse, longueur max, pauses, musique) est
-  aussi répercuté sur Firestore en tâche de fond, comme la progression.
-- Ensuite, chaque sauvegarde de progression (toutes les 10 mots, fin de
-  livre, retour au menu) est répercutée sur Firestore (document léger, pas de
-  nouvel envoi du PDF).
+- Sans compte : tout est stocké dans le navigateur (IndexedDB, sans limite
+  pratique de taille). Les livres de l'ancienne version (localStorage) sont
+  repris automatiquement au premier lancement.
+- À la connexion : les réglages sont fusionnés (le plus récent l'emporte), les
+  livres du compte absents de l'appareil apparaissent dans la bibliothèque
+  (icône nuage) et sont téléchargés à leur ouverture, les livres locaux absents
+  du compte y sont envoyés, et chaque progression garde la version la plus
+  récente.
+- Pendant la lecture : la position est enregistrée localement toutes les 5
+  secondes, et envoyée au compte à chaque pause, à la sortie du livre et au
+  plus toutes les minutes.
+- La position est mémorisée en caractère dans le texte (pas en numéro de mot) :
+  changer la longueur maximale des mots ne décale jamais la lecture.
