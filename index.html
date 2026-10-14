@@ -116,7 +116,7 @@
         <footer class="chrome chrome-bottom">
             <div class="seek-row">
                 <input type="range" id="seek" min="0" max="1000" step="1" value="0" aria-label="Position dans le livre">
-                <div class="seek-meta"><span id="pct">0 %</span><span id="remaining"></span></div>
+                <div class="seek-meta"><span id="pct">0 %</span><span id="moodChip" hidden></span><span id="remaining"></span></div>
             </div>
             <div class="controls">
                 <div class="speed" role="group" aria-label="Vitesse">
@@ -139,9 +139,13 @@
     <!-- ============================ DIALOGUES ============================ -->
     <dialog id="dlgGutenberg" class="sheet" aria-labelledby="gTitle">
         <header class="sheet-head">
-            <h2 id="gTitle">Livres gratuits</h2>
+            <h2 id="gTitle">Classiques gratuits</h2>
             <button class="icon-btn" data-close aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
         </header>
+        <div class="source-tabs" role="tablist" aria-label="Catalogue">
+            <button role="tab" class="tab" id="tabGutenberg" aria-selected="true" data-source="gutenberg">Project Gutenberg</button>
+            <button role="tab" class="tab" id="tabGoogle" aria-selected="false" data-source="google">Google Livres</button>
+        </div>
         <form id="gForm" class="search-row" role="search">
             <input type="search" id="gQuery" placeholder="Titre ou auteur (ex. Hugo, Dumas…)" aria-label="Rechercher un titre ou un auteur" enterkeyhint="search">
             <select id="gLang" aria-label="Langue">
@@ -155,8 +159,13 @@
             </select>
             <button class="btn primary" type="submit">Chercher</button>
         </form>
-        <p class="sheet-note">Œuvres du domaine public issues du Project Gutenberg.</p>
+        <p class="sheet-note" id="gNote">Œuvres du domaine public, texte complet.</p>
         <ul id="gResults" class="result-list" aria-live="polite"></ul>
+        <details class="bought">
+            <summary>Et mes livres achetés (Google Play, Kindle) ?</summary>
+            <p><strong>Google Play Livres :</strong> sur ordinateur, ouvrez play.google.com › Bibliothèque › Livres, puis sur le livre <em>Plus › Exporter › EPUB</em>. Si vous obtenez un fichier .epub ou .pdf, importez-le avec « Fichier ». Si vous obtenez un fichier .acsm, le livre est protégé par l’éditeur (DRM) et ne peut pas être lu ici.</p>
+            <p><strong>Kindle (Amazon) :</strong> les livres achetés sont chiffrés et Amazon ne permet plus de les télécharger depuis février 2025. Leur texte n’est accessible que dans les applications Kindle. Pour un classique, cherchez-le ici ; pour un livre récent, une version EPUB sans DRM (de nombreux éditeurs en vendent) s’importe directement.</p>
+        </details>
     </dialog>
 
     <dialog id="dlgUrl" class="sheet small" aria-labelledby="uTitle">
@@ -207,7 +216,48 @@
                     <span>Couper les mots au-delà de <output id="sMaxLenOut"></output></span>
                     <input type="range" id="sMaxLen" min="8" max="20" step="1">
                 </label>
+                <label class="row">
+                    <span>Pause sur les noms propres</span>
+                    <select id="sProper">
+                        <option value="1">Aucune</option>
+                        <option value="1.5">Légère</option>
+                        <option value="2">Marquée</option>
+                    </select>
+                </label>
+                <label class="row check"><input type="checkbox" id="sAuto"><span>Accélération progressive (+5 mots/min tous les 50 mots)</span></label>
+                <label class="row" id="sAutoMaxRow">
+                    <span>Jusqu’à</span>
+                    <select id="sAutoMax">
+                        <option value="1.25">+25 %</option>
+                        <option value="1.5">+50 %</option>
+                        <option value="2">+100 %</option>
+                    </select>
+                </label>
                 <label class="row check"><input type="checkbox" id="sRamp"><span>Démarrage en douceur après une pause</span></label>
+            </fieldset>
+            <fieldset>
+                <legend>Musique d’ambiance</legend>
+                <label class="row check"><input type="checkbox" id="sMusic"><span>Jouer une musique d’ambiance pendant la lecture</span></label>
+                <label class="row" id="sMoodRow">
+                    <span>Ambiance</span>
+                    <select id="sMood">
+                        <option value="auto">Selon le passage lu</option>
+                        <option value="calm">Calme</option>
+                        <option value="romantic">Romance</option>
+                        <option value="mysterious">Mystère</option>
+                        <option value="adventure">Aventure</option>
+                        <option value="upbeat">Joyeux</option>
+                        <option value="sad">Mélancolie</option>
+                        <option value="tense">Tension</option>
+                        <option value="dark">Sombre</option>
+                        <option value="epic">Épique</option>
+                    </select>
+                </label>
+                <label class="row" id="sVolRow">
+                    <span>Volume <output id="sVolOut"></output></span>
+                    <input type="range" id="sVol" min="0.05" max="1" step="0.05">
+                </label>
+                <p class="sheet-note">Musique générée en direct par l’appareil : aucun téléchargement, fonctionne hors ligne.</p>
             </fieldset>
             <fieldset>
                 <legend>Affichage</legend>

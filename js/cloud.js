@@ -104,10 +104,13 @@ export async function syncSettings(local) {
     if (remote && remoteAt > (local.updatedAt || 0)) {
         const merged = { ...local, updatedAt: remoteAt };
         if (remote.wpm) merged.wpm = Number(remote.wpm);
-        for (const k of ['pauses', 'maxLen', 'fontScale', 'font', 'theme', 'guide', 'progressLine', 'rampUp']) {
+        for (const k of ['pauses', 'maxLen', 'fontScale', 'font', 'theme', 'guide', 'progressLine', 'rampUp', 'properPause', 'autoSpeed', 'autoSpeedMax', 'music', 'musicVolume', 'musicMood']) {
             if (remote[k] !== undefined) merged[k] = remote[k];
         }
         if (remote.maxLen === undefined && remote.maxWordLength) merged.maxLen = Number(remote.maxWordLength);
+        if (remote.autoSpeed === undefined && remote.autoSpeedEnabled !== undefined) merged.autoSpeed = !!remote.autoSpeedEnabled;
+        if (remote.properPause === undefined && remote.pauseOnProperNoun !== undefined) merged.properPause = remote.pauseOnProperNoun ? 1.5 : 1;
+        if (remote.music === undefined && remote.ambientMusicEnabled !== undefined) merged.music = !!remote.ambientMusicEnabled;
         return merged;
     }
     await pushSettings(local);

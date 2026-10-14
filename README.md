@@ -8,7 +8,7 @@ point de fixation (la lettre rouge), pour lire sans déplacer les yeux.
 | Source | Détails |
 |---|---|
 | **Fichier** | PDF (avec texte), EPUB (sans DRM), TXT, HTML. Glisser-déposer accepté. |
-| **Classiques** | Recherche dans les 70 000 livres libres du Project Gutenberg, par titre/auteur et langue. |
+| **Classiques** | Recherche par titre/auteur et langue dans le Project Gutenberg (70 000 livres) et dans Google Livres (ouvrages en accès libre et intégral, téléchargés en EPUB ou PDF). |
 | **Lien web** | Article de presse ou de blog (le contenu principal est isolé), page Gutenberg, lien direct vers un PDF/EPUB/TXT. |
 | **Coller** | N'importe quel texte copié. Sur Android, « Partager → Lecture rapide » depuis une autre app. |
 
@@ -27,12 +27,23 @@ Tout le texte passe par la même chaîne de nettoyage (`js/text.js`, `js/extract
   restent attachés au mot, `M.` ou `J. K.` ne sont pas pris pour des fins de phrase.
 - Les mots trop longs sont coupés en morceaux lisibles, de préférence sur leurs tirets.
 
+## Livres achetés (Google Play, Kindle)
+
+- **Google Play Livres** : play.google.com › Bibliothèque › Livres › *Plus › Exporter › EPUB*. Un
+  fichier .epub ou .pdf s'importe directement. Un fichier .acsm signifie que l'éditeur a protégé le
+  livre (DRM) : l'application l'explique au lieu d'échouer en silence.
+- **Kindle** : les livres sont chiffrés par Amazon, qui ne permet plus de les télécharger depuis
+  février 2025. L'application ne contourne pas ces protections (illégal en France, loi DADVSI) ;
+  un lien Amazon affiche une explication et oriente vers les classiques ou une version EPUB sans DRM.
+- Un lien de livre Google (books.google… ou play.google…) collé dans « Lien web » est importé s'il
+  est en accès libre.
+
 ## Accès aux livres en ligne
 
 Les navigateurs bloquent souvent les téléchargements directs (CORS). Chaque requête essaie
 dans l'ordre :
 
-1. le proxy du site lui-même (`/proxy/gutenberg/…`, `/proxy/gutendex/…`, déclaré dans `netlify.toml`) ;
+1. le proxy du site lui-même (`/proxy/gutenberg/…`, `/proxy/gutendex/…`, `/proxy/googlebooks/…`, déclarés dans `netlify.toml`) ;
 2. le site d'origine ;
 3. trois proxys publics de secours.
 
@@ -50,6 +61,14 @@ officiel de Gutenberg.
   vitesse réelle (la durée de base est compensée).
 - Démarrage en douceur après chaque pause, écran maintenu allumé, pause automatique si l'onglet
   est quitté.
+- **Pause sur les noms propres** (aucune / légère / marquée) : un mot à majuscule hors début de
+  phrase reste affiché plus longtemps.
+- **Accélération progressive** : +5 mots/min tous les 50 mots, jusqu'à +25 %, +50 % ou +100 %.
+  Changer la vitesse à la main repart de la nouvelle valeur.
+- **Musique d'ambiance** : générée en direct par l'appareil (aucun fichier, fonctionne hors ligne).
+  Le livre est analysé à l'ouverture pour repérer l'ambiance de chaque passage (calme, tension,
+  aventure, romance, mystère, mélancolie, épique, joyeux, sombre) ; la musique change en fondu.
+  Ambiance fixe possible, volume réglable, coupée à chaque pause.
 - Raccourcis : `Espace` lire/pause, `←` `→` phrase, `Maj`+`←` `→` mot, `↑` `↓` vitesse, `F` plein
   écran, `Échap` retour. Mobile : toucher pour lire/pause, glisser pour changer de phrase.
 
@@ -69,10 +88,12 @@ officiel de Gutenberg.
 index.html        page unique
 css/app.css       styles (thèmes auto / sombre / clair / sépia)
 js/app.js         interface
-js/engine.js      moteur RSVP (cadence, navigation, temps restant)
+js/engine.js      moteur RSVP (cadence, navigation, accélération, temps restant)
+js/mood.js        détection de l'ambiance des passages
+js/ambience.js    musique d'ambiance synthétisée (Web Audio)
 js/text.js        normalisation et découpage du texte
 js/extract.js     extraction PDF / EPUB / HTML / TXT
-js/sources.js     Gutenberg et import par lien
+js/sources.js     Gutenberg, Google Livres et import par lien
 js/store.js       IndexedDB, réglages, reprise de l'ancienne version
 js/cloud.js       synchronisation Firebase (facultative)
 js/config.js      configuration Firebase (remplie par build.js)
@@ -91,6 +112,9 @@ proxys `/proxy/…` ne fonctionnent que sur Netlify ; ailleurs (GitHub Pages, se
 l'application passe automatiquement aux autres routes.
 
 En local : `node build.js && npx serve dist`.
+
+Variable facultative `GOOGLE_BOOKS_API_KEY` (clé d'API Google Books) : sans elle, la recherche
+Google Livres utilise le quota anonyme de Google, suffisant pour un usage personnel.
 
 ## Tests
 

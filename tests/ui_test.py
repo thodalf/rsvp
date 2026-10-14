@@ -1,7 +1,7 @@
 # Test de bout en bout dans Chromium headless.
 # Le CDN et les sites de livres sont simulés : le test vérifie l'app, pas le réseau.
 #   cd tests && python3 ui_test.py   (après `node ../build.js`)
-import json, os, subprocess, sys, time, pathlib
+import io, json, os, subprocess, sys, time, pathlib, zipfile
 os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', '/opt/pw-browsers')
 from playwright.sync_api import sync_playwright
 
@@ -29,6 +29,29 @@ BOOK = ("The Project Gutenberg eBook of Les misérables\r\n\r\n*** START OF THE 
         + "\r\n\r\n".join(f"En 1815, M. Charles-François-Bienvenu Myriel était évêque de Digne. C'était un\r\nvieillard d'environ soixante-quinze ans ; paragraphe numéro {i}." for i in range(1, 200))
         + "\r\n\r\n*** END OF THE PROJECT GUTENBERG EBOOK ***\r\nlicence...")
 
+def make_epub():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+        z.writestr('mimetype', 'application/epub+zip')
+        z.writestr('META-INF/container.xml', '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="content.opf"/></rootfiles></container>')
+        z.writestr('content.opf', '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Candide</dc:title></metadata><manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>')
+        body = ''.join(f'<p>Il y avait en Westphalie, dans le château de monsieur le baron, un jeune garçon numéro {i}.</p>' for i in range(60))
+        z.writestr('c.xhtml', f'<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Chapitre premier</h1>{body}</body></html>')
+    return buf.getvalue()
+EPUB = make_epub()
+GOOGLE = {"items": [
+    {"id": "abc123XYZ_0", "volumeInfo": {"title": "Candide", "authors": ["Voltaire"], "publishedDate": "1759"},
+     "accessInfo": {"viewability": "ALL_PAGES", "publicDomain": True,
+                    "epub": {"isAvailable": True, "downloadLink": "http://books.google.fr/books/download/Candide.epub?id=abc123XYZ_0&output=epub&source=gbs_api"},
+                    "pdf": {"isAvailable": True, "downloadLink": "http://books.google.fr/books/download/Candide.pdf?id=abc123XYZ_0&output=pdf"}}},
+    {"id": "lecture000", "volumeInfo": {"title": "Livre en aperçu seulement"}, "accessInfo": {"viewability": "PARTIAL", "epub": {"isAvailable": False}, "pdf": {"isAvailable": False}}}
+]}
+
+def proxy_body(url):
+    if 'gutendex' in url: return json.dumps(GUTENDEX).encode(), 'application/json'
+    if 'books.google' in url: return EPUB, 'application/epub+zip'
+    return BOOK.encode('utf-8'), 'text/plain; charset=utf-8'
+
 def routes(page):
     page.route('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', lambda r: r.fulfill(path=str(NM / 'pdfjs-dist/build/pdf.min.js'), content_type='application/javascript'))
     page.route('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js', lambda r: r.fulfill(path=str(NM / 'pdfjs-dist/build/pdf.worker.min.js'), content_type='application/javascript'))
@@ -36,9 +59,10 @@ def routes(page):
     # gutendex direct : simule un blocage, le proxy public de secours répond
     page.route('https://gutendex.com/**', lambda r: r.abort())
     page.route('https://corsproxy.io/**', lambda r: r.fulfill(
-        body=json.dumps(GUTENDEX) if 'gutendex' in r.request.url else BOOK.encode('utf-8'),
-        content_type='application/json' if 'gutendex' in r.request.url else 'text/plain; charset=utf-8',
+        body=proxy_body(r.request.url)[0], content_type=proxy_body(r.request.url)[1],
         headers={'access-control-allow-origin': '*'}))
+    page.route('https://www.googleapis.com/**', lambda r: r.fulfill(body=json.dumps(GOOGLE), content_type='application/json', headers={'access-control-allow-origin': '*'}))
+    page.route('https://books.google.com/**', lambda r: r.abort())
     page.route('https://www.gutenberg.org/**', lambda r: r.abort())
     page.route('https://api.allorigins.win/**', lambda r: r.abort())
     page.route('https://api.codetabs.com/**', lambda r: r.abort())
@@ -46,6 +70,7 @@ def routes(page):
 with sync_playwright() as p:
     browser = p.chromium.launch()
     ctx = browser.new_context(viewport={'width': 1280, 'height': 800}, color_scheme='dark')
+    ctx.add_init_script("""(() => { const C = window.AudioContext; window.AudioContext = function (...a) { const c = new C(...a); window.__audio = c; return c; }; window.AudioContext.prototype = C.prototype; })();""")
     page = ctx.new_page()
     page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
     page.on('pageerror', lambda e: errors.append(str(e)))
@@ -160,6 +185,48 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT / '6-reglages.png'))
     page.keyboard.press('Escape')
     check(page.evaluate("document.documentElement.dataset.theme") == 'sepia', 'thème appliqué')
+
+    print('Musique, accélération, noms propres')
+    page.click('#btnSettings')
+    page.check('#sMusic')
+    check(page.locator('#sProper').input_value() == '1.5' and page.locator('#sAuto').is_checked(), 'pause noms propres et accélération actives par défaut')
+    page.keyboard.press('Escape')
+    page.click('#resumeCard')
+    page.wait_for_selector('#reader:not([hidden])')
+    page.keyboard.press('Space')
+    page.wait_for_timeout(1500)
+    check(page.evaluate("window.__audio && window.__audio.state") == 'running', 'musique jouée pendant la lecture')
+    page.keyboard.press('Space')
+    check(page.locator('#moodChip').is_visible() and page.locator('#moodChip').inner_text().startswith('♪'), 'ambiance indiquée en pause : ' + page.locator('#moodChip').inner_text())
+    page.wait_for_timeout(1500)
+    check(page.evaluate("window.__audio.state") == 'suspended', 'musique coupée en pause')
+    page.keyboard.press('Escape')
+    page.click('#btnSettings'); page.uncheck('#sMusic'); page.keyboard.press('Escape')
+
+    print('Google Livres')
+    page.click('#btnGutenberg')
+    page.click('#tabGoogle')
+    page.wait_for_selector('#gResults li button >> text=Candide', timeout=15000)
+    check(page.locator('#gResults li button').count() == 1, 'seuls les livres téléchargeables sont proposés')
+    page.locator('#gResults li button').first.click()
+    page.wait_for_selector('#reader:not([hidden])', timeout=20000)
+    check(page.locator('#readerTitle').inner_text() == 'Candide', 'livre Google ouvert')
+    check('Westphalie' in page.locator('#context').inner_text() or 'Chapitre' in page.locator('#context').inner_text(), 'texte Google extrait')
+    page.keyboard.press('Escape')
+
+    print('Liens Amazon / fichiers protégés')
+    page.click('#btnUrl')
+    page.fill('#uInput', 'https://www.amazon.fr/dp/B00ABCDEFG')
+    page.click('#uForm button[type=submit]')
+    page.wait_for_selector('#toast:not([hidden])')
+    check('Kindle' in page.locator('#toast').inner_text(), 'lien Kindle : explication claire')
+    acsm = HERE / 'shots_tmp.acsm'
+    acsm.write_text('<fulfillmentToken fulfillmentType="buy" xmlns="http://ns.adobe.com/adept"></fulfillmentToken>')
+    page.set_input_files('#fileInput', str(acsm))
+    page.wait_for_timeout(500)
+    check('.acsm' in page.locator('#toast').inner_text(), 'fichier .acsm : explication claire')
+    acsm.unlink()
+    page.screenshot(path=str(OUT / '10-acsm.png'))
 
     print('Mobile')
     m = browser.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, color_scheme='light')

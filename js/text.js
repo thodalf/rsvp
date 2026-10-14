@@ -141,6 +141,14 @@ const OPEN_TIGHT = /^[(\[{“‘„]+$/u;     // se colle sans espace au mot sui
 
 export const FLAG_SENTENCE_START = 1;
 export const FLAG_PARAGRAPH_END = 2;
+export const FLAG_PROPER_NOUN = 4;
+
+/** Nom propre probable : majuscule initiale hors début de phrase (ni sigle, ni titre en capitales). */
+function looksProper(word) {
+    const core = word.replace(/^[^\p{L}]+/u, '').replace(/[^\p{L}'’-]+$/u, '');
+    if (!/^\p{Lu}/u.test(core) || core === 'I' || core.length < 2) return false;
+    return core !== core.toUpperCase();
+}
 
 /** Nombre de lettres/chiffres d'un token (sert au point de fixation et aux pauses). */
 function letterCount(w) {
@@ -266,6 +274,7 @@ export function tokenize(text, maxLen = 13) {
             weights.push(weightOf(pieces[i], paraEnd, !last, last && ends));
             let f = 0;
             if (sentenceStart && i === 0) f |= FLAG_SENTENCE_START;
+            else if (i === 0 && looksProper(t.w)) f |= FLAG_PROPER_NOUN;
             if (paraEnd) f |= FLAG_PARAGRAPH_END;
             flags.push(f);
         }

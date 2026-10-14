@@ -19,6 +19,18 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/proxy/googleapis/*"
+  to = "https://www.googleapis.com/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/proxy/googlebooks/*"
+  to = "https://books.google.com/:splat"
+  status = 200
+  force = true
+
 [[headers]]
   for = "/sw.js"
   [headers.values]

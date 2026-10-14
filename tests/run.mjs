@@ -10,7 +10,7 @@ globalThis.DOMParser = DOMParser;
 globalThis.JSZip = JSZip;
 globalThis.pdfjsLib = pdfjsLib;
 
-const { tokenize, textFromPlain, splitLong, pivotIndex, indexAtOffset, joinLines, FLAG_SENTENCE_START, FLAG_PARAGRAPH_END } = await import('../js/text.js');
+const { FLAG_PROPER_NOUN, tokenize, textFromPlain, splitLong, pivotIndex, indexAtOffset, joinLines, FLAG_SENTENCE_START, FLAG_PARAGRAPH_END } = await import('../js/text.js');
 const { extractAny, extractHtmlString, decodeBytes, sniffFormat } = await import('../js/extract.js');
 
 let passed = 0;
@@ -124,6 +124,49 @@ await test('PDF : en-têtes/numéros retirés, chiffres du texte conservés, cé
     assert.ok(paras.some(p => /sans ponctuation finale et donc reprend ici\.$/.test(p)), 'paragraphe continué entre pages');
     assert.ok(r.text.includes('« Rien du tout », répondit-elle à Gavroche, et elle sortit.'), 'aucune ligne perdue');
     assert.ok(!/(^|\s)[1-6](\s|$)/.test(paras.join(' ').replace(/page \d/g, '')), 'numéros de page isolés supprimés');
+});
+
+
+console.log('Noms propres, accélération, ambiance');
+await test('noms propres repérés hors début de phrase', () => {
+    const t = tokenize('Puis Javert regarda Paris. Le CHAPITRE suivant parle de Cosette.');
+    const proper = t.words.filter((w, i) => t.flags[i] & FLAG_PROPER_NOUN);
+    assert.deepEqual(proper, ['Javert', 'Paris.', 'Cosette.']);
+});
+await test('accélération : +5 mots/min tous les 50 mots, plafonnée', async () => {
+    const { RsvpEngine } = await import('../js/engine.js');
+    const e = new RsvpEngine({});
+    e.autoSpeed = true; e.autoSpeedMax = 1.1; e.setWpm(300);
+    e.load(tokenize(Array(2000).fill('mot').join(' ')));
+    e.playing = true;
+    for (let k = 0; k < 120; k++) { e._tick(); clearTimeout(e._timer); }
+    assert.equal(e.effectiveWpm, 310);
+    for (let k = 0; k < 1000; k++) { e._tick(); clearTimeout(e._timer); }
+    assert.equal(e.effectiveWpm, 330, 'plafond à +10 %');
+    e.setWpm(400);
+    assert.equal(e.effectiveWpm, 400, 'changer la vitesse remet à zéro');
+    e.playing = false;
+});
+await test('pause sur les noms propres allonge leur durée sans changer la vitesse moyenne', async () => {
+    const { RsvpEngine } = await import('../js/engine.js');
+    const e = new RsvpEngine({});
+    e.pauses = 0; e.properMult = 2; e.setWpm(600);
+    const t = tokenize('le chat de Victor mange une pomme verte');
+    e.load(t);
+    const w = i => e._weight(i) * e._unit();
+    assert.ok(Math.abs(w(3) / w(0) - 2) < 1e-9);
+    const total = t.words.reduce((a, _, i) => a + w(i), 0);
+    assert.ok(Math.abs(total - t.words.length * 100) < 1e-6, 'moyenne = 100 ms à 600 mots/min');
+});
+await test('carte des ambiances', async () => {
+    const { buildMoodMap, moodOfWord } = await import('../js/mood.js');
+    assert.equal(moodOfWord('dans'), null);
+    assert.equal(moodOfWord('mystérieusement'), 'mysterious');
+    const calm = Array(300).fill('il marchait vers la maison').join(' ');
+    const fight = Array(60).fill('la bataille et la victoire des soldats dans la guerre').join(' ');
+    const map = buildMoodMap(tokenize(calm + ' ' + fight).words);
+    assert.equal(map[0], 'calm');
+    assert.equal(map[map.length - 1], 'epic');
 });
 
 console.log(`\n${passed} tests réussis`);

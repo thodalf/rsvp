@@ -5,7 +5,7 @@
 // - La durée de base est normalisée par le poids moyen du livre : avec les pauses naturelles,
 //   la vitesse affichée (mots/min) reste la vitesse réellement obtenue.
 
-import { FLAG_SENTENCE_START, FLAG_PARAGRAPH_END, indexAtOffset } from './text.js';
+import { FLAG_SENTENCE_START, FLAG_PARAGRAPH_END, FLAG_PROPER_NOUN, indexAtOffset } from './text.js';
 
 const RAMP = [1.8, 1.5, 1.3, 1.15, 1.05];
 
@@ -20,6 +20,12 @@ export class RsvpEngine {
         this.wpm = 300;
         this.pauses = 1;
         this.rampUp = true;
+        this.properMult = 1;        // 1 = pas de pause sur les noms propres
+        this.autoSpeed = false;     // accélération progressive pendant la lecture
+        this.autoSpeedMax = 1.5;    // plafond : 1.5 = jusqu'à +50 % de la vitesse choisie
+        this.boost = 0;             // mots/min gagnés par l'accélération
+        this._streak = 0;           // mots lus d'affilée depuis le dernier palier
+        this.onBoost = () => {};
         this._timer = null;
         this._due = 0;
         this._ramp = 0;
@@ -41,17 +47,34 @@ export class RsvpEngine {
     get offset() { return this.tokens ? this.tokens.offsets[this.index] : 0; }
 
     _weight(i) {
-        return 1 + (this.tokens.weights[i] - 1) * this.pauses;
+        let w = 1 + (this.tokens.weights[i] - 1) * this.pauses;
+        if (this.tokens.flags[i] & FLAG_PROPER_NOUN) w *= this.properMult;
+        return w;
     }
+
+    /** Vitesse réellement appliquée (vitesse choisie + accélération acquise). */
+    get effectiveWpm() { return this.wpm + this.boost; }
 
     /** Durée de base (ms) d'un mot de poids 1, ajustée pour que la moyenne corresponde aux mots/min. */
     _unit() {
         const n = this.length;
         const mean = n ? this._cum[n] / n : 1;
-        return 60000 / this.wpm / (mean || 1);
+        return 60000 / this.effectiveWpm / (mean || 1);
     }
 
-    setWpm(wpm) { this.wpm = wpm; }
+    /** Changer la vitesse à la main remet l'accélération à zéro. */
+    setWpm(wpm) {
+        if (wpm !== this.wpm) { this.boost = 0; this._streak = 0; }
+        this.wpm = wpm;
+    }
+
+    setProperMult(m) {
+        if (m === this.properMult) return;
+        this.properMult = m;
+        if (this.tokens) this.load(this.tokens, this.index);
+    }
+
+    resetBoost() { this.boost = 0; this._streak = 0; }
 
     setPauses(p) {
         this.pauses = p;
@@ -98,6 +121,15 @@ export class RsvpEngine {
             return;
         }
         this.index++;
+        if (this.autoSpeed && ++this._streak >= 50) {
+            // +5 mots/min tous les 50 mots, jusqu'au plafond (comme l'ancienne version)
+            this._streak = 0;
+            const ceiling = Math.round(this.wpm * this.autoSpeedMax);
+            if (this.wpm + this.boost < ceiling) {
+                this.boost = Math.min(this.boost + 5, ceiling - this.wpm);
+                this.onBoost(this.effectiveWpm);
+            }
+        }
         this.onWord(this.index);
         const now = performance.now();
         // Si l'onglet a été gelé (veille), on repart proprement au lieu d'enchaîner les mots en rafale.

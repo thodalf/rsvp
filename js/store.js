@@ -105,6 +105,12 @@ export const DEFAULT_SETTINGS = {
     guide: true,        // repère au-dessus/au-dessous de la lettre de fixation
     progressLine: true, // filet de progression discret pendant la lecture
     rampUp: true,       // démarrage en douceur après chaque pause
+    properPause: 1.5,   // allongement sur les noms propres (1 = aucun)
+    autoSpeed: true,    // accélération progressive : +5 mots/min tous les 50 mots
+    autoSpeedMax: 1.5,  // plafond de l'accélération (1.5 = +50 %)
+    music: false,       // musique d'ambiance
+    musicVolume: 0.35,
+    musicMood: 'auto',  // 'auto' = selon le passage, sinon une ambiance fixe
     updatedAt: 0
 };
 
@@ -175,6 +181,10 @@ export async function migrateLegacy() {
             const s = loadSettings();
             if (oldSettings.wpm) s.wpm = Math.max(100, Math.min(1200, Number(oldSettings.wpm)));
             if (oldSettings.maxWordLength) s.maxLen = Math.max(8, Math.min(20, Number(oldSettings.maxWordLength)));
+            if (oldSettings.autoSpeedEnabled !== undefined) s.autoSpeed = !!oldSettings.autoSpeedEnabled;
+            if (oldSettings.pauseOnProperNoun === false) s.properPause = 1;
+            else if (oldSettings.pauseProperNounMultiplier) s.properPause = Number(oldSettings.pauseProperNounMultiplier) >= 1.7 ? 2 : 1.5;
+            if (oldSettings.ambientMusicEnabled !== undefined) s.music = !!oldSettings.ambientMusicEnabled;
             saveSettings(s);
         }
         ls.setItem(MIGRATED_KEY, String(Date.now()));

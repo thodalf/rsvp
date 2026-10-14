@@ -2,7 +2,9 @@
 
 import { tokenize, pivotIndex, indexAtOffset } from './text.js';
 import { extractAny, extractPasted, extractPdf } from './extract.js';
-import { searchGutenberg, downloadGutenberg, importFromUrl } from './sources.js';
+import { searchGutenberg, downloadGutenberg, importFromUrl, searchGoogleBooks, downloadGoogleBook } from './sources.js';
+import { buildMoodMap, MOODS, MOOD_SEGMENT } from './mood.js';
+import { Ambience } from './ambience.js';
 import { store, textId, loadSettings, saveSettings, migrateLegacy } from './store.js';
 import { RsvpEngine } from './engine.js';
 import * as cloud from './cloud.js';
@@ -50,6 +52,8 @@ let current = null;          // { book, text, tokens }
 let lastSavedAt = 0;
 let lastCloudAt = 0;
 let wakeLock = null;
+const ambience = new Ambience();
+let lastMoodSeg = -1;
 
 const engine = new RsvpEngine({
     onWord: renderWord,
@@ -58,13 +62,32 @@ const engine = new RsvpEngine({
         const btn = $('btnPlay');
         btn.replaceChildren(icon(playing ? 'pause' : 'play'));
         btn.setAttribute('aria-label', playing ? 'Pause' : 'Lire');
-        if (playing) { acquireWakeLock(); $('toast').hidden = true; } else { releaseWakeLock(); renderPaused(); saveProgress(true); }
+        if (playing) {
+            acquireWakeLock();
+            $('toast').hidden = true;
+            if (settings.music) { lastMoodSeg = -1; ambience.start(moodAt(engine.index)); }
+        } else {
+            releaseWakeLock();
+            ambience.stop();
+            renderPaused();
+            saveProgress(true);
+        }
     },
     onEnd: () => {
         showMessage('Fin du livre 🎉');
         saveProgress(true);
     }
 });
+
+engine.onBoost = () => { $('wpmOut').textContent = engine.effectiveWpm; };
+
+/** Ambiance du passage à l'index i (carte calculée à la première demande). */
+function moodAt(i) {
+    if (settings.musicMood !== 'auto') return settings.musicMood;
+    if (!current) return 'calm';
+    if (!current.moodMap) current.moodMap = buildMoodMap(current.tokens.words);
+    return current.moodMap[Math.min(current.moodMap.length - 1, (i / MOOD_SEGMENT) | 0)] || 'calm';
+}
 
 // ---------------------------------------------------------------------------------------------
 // Réglages
@@ -79,8 +102,13 @@ function applySettings() {
     root.style.setProperty('--font-scale', settings.fontScale);
     engine.setWpm(settings.wpm);
     engine.rampUp = settings.rampUp;
+    engine.autoSpeed = settings.autoSpeed;
+    engine.autoSpeedMax = settings.autoSpeedMax;
     if (engine.pauses !== settings.pauses) engine.setPauses(settings.pauses);
-    $('wpmOut').textContent = settings.wpm;
+    engine.setProperMult(settings.properPause);
+    ambience.setVolume(settings.musicVolume);
+    if (!settings.music) ambience.shutdown();
+    $('wpmOut').textContent = engine.effectiveWpm;
     if (current && !engine.playing) renderPaused();
 }
 
@@ -93,6 +121,7 @@ function updateSettings(patch) {
     if (needRetokenize) {
         const offset = engine.offset;
         current.tokens = tokenize(current.text, settings.maxLen);
+        current.moodMap = null;
         engine.load(current.tokens, indexAtOffset(current.tokens.offsets, offset));
     }
     clearTimeout(settingsPushTimer);
@@ -109,6 +138,16 @@ function fillSettingsForm() {
     $('sTheme').value = settings.theme;
     $('sGuide').checked = settings.guide;
     $('sProgress').checked = settings.progressLine;
+    $('sProper').value = String(settings.properPause);
+    $('sAuto').checked = settings.autoSpeed;
+    $('sAutoMax').value = String(settings.autoSpeedMax);
+    $('sAutoMaxRow').classList.toggle('disabled', !settings.autoSpeed);
+    $('sMusic').checked = settings.music;
+    $('sMood').value = settings.musicMood;
+    $('sVol').value = settings.musicVolume; $('sVolOut').textContent = Math.round(settings.musicVolume * 100) + ' %';
+    $('sMoodRow').classList.toggle('disabled', !settings.music);
+    $('sVolRow').classList.toggle('disabled', !settings.music);
+    if (!ambience.supported) { $('sMusic').disabled = true; }
 }
 
 function bindSettingsForm() {
@@ -122,10 +161,16 @@ function bindSettingsForm() {
     $('sTheme').addEventListener('change', e => updateSettings({ theme: e.target.value }));
     $('sGuide').addEventListener('change', e => updateSettings({ guide: e.target.checked }));
     $('sProgress').addEventListener('change', e => updateSettings({ progressLine: e.target.checked }));
+    $('sProper').addEventListener('change', e => updateSettings({ properPause: Number(e.target.value) }));
+    $('sAuto').addEventListener('change', e => { updateSettings({ autoSpeed: e.target.checked }); if (!e.target.checked) engine.resetBoost(); fillSettingsForm(); });
+    $('sAutoMax').addEventListener('change', e => updateSettings({ autoSpeedMax: Number(e.target.value) }));
+    $('sMusic').addEventListener('change', e => { updateSettings({ music: e.target.checked }); fillSettingsForm(); });
+    $('sMood').addEventListener('change', e => updateSettings({ musicMood: e.target.value }));
+    $('sVol').addEventListener('input', e => { $('sVolOut').textContent = Math.round(e.target.value * 100) + ' %'; updateSettings({ musicVolume: Number(e.target.value) }); });
 }
 
 function changeSpeed(delta) {
-    const wpm = Math.max(100, Math.min(1200, Math.round((settings.wpm + delta) / 5) * 5));
+    const wpm = Math.max(100, Math.min(1200, Math.round((engine.effectiveWpm + delta) / 5) * 5));
     updateSettings({ wpm });
     if (engine.playing) flash(`${wpm} mots/min`);
 }
@@ -281,6 +326,17 @@ async function importFile(file) {
 // ---------------------------------------------------------------------------------------------
 
 let gSearchCtrl = null;
+let catalog = 'gutenberg';
+
+function setCatalog(source) {
+    catalog = source;
+    for (const t of document.querySelectorAll('.source-tabs .tab')) t.setAttribute('aria-selected', String(t.dataset.source === source));
+    $('gNote').textContent = source === 'google'
+        ? 'Livres numérisés par Google en accès libre et intégral (domaine public).'
+        : 'Œuvres du domaine public, texte complet.';
+    runGutenbergSearch();
+}
+
 async function runGutenbergSearch() {
     if (gSearchCtrl) gSearchCtrl.abort();
     gSearchCtrl = new AbortController();
@@ -288,14 +344,17 @@ async function runGutenbergSearch() {
     const ul = $('gResults');
     ul.replaceChildren(h('li', { class: 'status' }, 'Recherche…'));
     try {
-        const results = await searchGutenberg($('gQuery').value.trim(), $('gLang').value, { signal });
+        const search = catalog === 'google' ? searchGoogleBooks : searchGutenberg;
+        const results = await search($('gQuery').value.trim(), $('gLang').value, { signal });
         if (signal.aborted) return;
         ul.replaceChildren();
         if (!results.length) { ul.append(h('li', { class: 'status' }, 'Aucun livre trouvé. Essayez un autre nom ou une autre langue.')); return; }
         for (const r of results) {
-            ul.append(h('li', {}, h('button', { onclick: () => openGutenbergBook(r) },
+            const meta = catalog === 'google' ? [r.year, r.epub ? 'EPUB' : 'PDF'].filter(Boolean).join(' · ') : '';
+            ul.append(h('li', {}, h('button', { onclick: () => catalog === 'google' ? openGoogleBook(r) : openGutenbergBook(r) },
                 h('span', { class: 'result-title' }, r.title),
-                h('span', { class: 'result-author' }, r.author || 'Auteur inconnu')
+                h('span', { class: 'result-author' }, r.author || 'Auteur inconnu'),
+                meta ? h('span', { class: 'result-meta' }, meta) : null
             )));
         }
     } catch (e) {
@@ -320,6 +379,22 @@ async function openGutenbergBook(r) {
     }
 }
 
+async function openGoogleBook(r) {
+    const id = 'gb_' + r.id;
+    const existing = await store.getBook(id);
+    $('dlgGutenberg').close();
+    if (existing && existing.hasText) { await openBook(id); return; }
+    const b = busy(`Téléchargement de « ${r.title} »…`);
+    try {
+        const result = await downloadGoogleBook(r, { signal: b.signal, onStatus: b.status });
+        unbusy();
+        await addBook(result, { id, source: 'google', sourceId: r.id });
+    } catch (e) {
+        unbusy();
+        if (!b.signal.aborted) toast(e.message, { error: true, ms: 7000 });
+    }
+}
+
 async function submitUrl(e) {
     e.preventDefault();
     const url = $('uInput').value;
@@ -330,7 +405,9 @@ async function submitUrl(e) {
         unbusy();
         const extra = result.source === 'gutenberg'
             ? { id: 'pg_' + result.sourceId, source: 'gutenberg', sourceId: result.sourceId }
-            : { source: 'url', sourceUrl: result.sourceUrl };
+            : result.source === 'google'
+                ? { id: 'gb_' + result.sourceId, source: 'google', sourceId: result.sourceId }
+                : { source: 'url', sourceUrl: result.sourceUrl };
         await addBook(result, extra);
         $('uInput').value = '';
     } catch (err) {
@@ -396,6 +473,8 @@ async function openBook(id) {
 
 async function closeReader() {
     engine.pause();
+    ambience.shutdown();
+    engine.resetBoost();
     await saveProgress(true);
     current = null;
     document.title = 'Lecture rapide';
@@ -421,6 +500,10 @@ function renderWord(i) {
     wPivot.textContent = chars[p] || '';
     wRight.textContent = chars.slice(p + 1).join('');
     fill.style.transform = `scaleX(${engine.ratio})`;
+    if (settings.music && engine.playing && settings.musicMood === 'auto') {
+        const seg = (i / MOOD_SEGMENT) | 0;
+        if (seg !== lastMoodSeg) { lastMoodSeg = seg; ambience.setMood(moodAt(i)); }
+    }
     if (engine.playing && Date.now() - lastSavedAt > 5000) saveProgress(false);
 }
 
@@ -457,6 +540,9 @@ function renderPaused() {
     $('seek').value = Math.round(engine.ratio * 1000);
     $('pct').textContent = (pct < 10 && pct > 0 ? pct.toFixed(1) : Math.round(pct)) + ' %';
     $('remaining').textContent = 'encore ' + formatDuration(engine.remainingMs());
+    $('wpmOut').textContent = engine.effectiveWpm;
+    $('moodChip').hidden = !settings.music;
+    if (settings.music) $('moodChip').textContent = '♪ ' + MOODS[moodAt(i)];
 }
 
 let pendingSave = null;
@@ -664,6 +750,7 @@ function bindLibrary() {
     });
     $('gForm').addEventListener('submit', e => { e.preventDefault(); runGutenbergSearch(); });
     $('gLang').addEventListener('change', runGutenbergSearch);
+    document.querySelectorAll('.source-tabs .tab').forEach(t => t.addEventListener('click', () => setCatalog(t.dataset.source)));
     $('btnUrl').addEventListener('click', () => { $('dlgUrl').showModal(); $('uInput').focus(); });
     $('uForm').addEventListener('submit', submitUrl);
     $('btnPaste').addEventListener('click', () => { $('dlgPaste').showModal(); $('pText').focus(); });

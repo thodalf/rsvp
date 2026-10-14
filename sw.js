@@ -6,7 +6,7 @@ const RUNTIME = 'runtime-v2';
 const APP_SHELL = [
     './', './index.html', './manifest.json', './css/app.css',
     './js/app.js', './js/text.js', './js/extract.js', './js/sources.js', './js/store.js',
-    './js/engine.js', './js/cloud.js', './js/config.js',
+    './js/engine.js', './js/cloud.js', './js/config.js', './js/mood.js', './js/ambience.js',
     './icons/icon-32.png', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'
 ];
 const CDN = /^https:\/\/(cdnjs\.cloudflare\.com|www\.gstatic\.com\/firebasejs)\//;

@@ -44,6 +44,7 @@ export function sniffFormat(bytes, nameOrType = '') {
     if (b[0] === 0x50 && b[1] === 0x4B) return 'epub';                                    // PK (zip)
     const hint = nameOrType.toLowerCase();
     const head = decodeBytes(b.subarray(0, 2048)).toLowerCase();
+    if (/\.acsm$/.test(hint) || head.includes('<fulfillmenttoken')) return 'acsm';
     if (/\.x?html?$|html/.test(hint) || /<!doctype html|<html[\s>]|<body[\s>]/.test(head)) return 'html';
     return 'txt';
 }
@@ -68,6 +69,9 @@ export function decodeBytes(bytes) {
 /** Point d'entrée : n'importe quel fichier → { text, title, author }. */
 export async function extractAny(bytes, { name = '', type = '', onProgress } = {}) {
     const format = sniffFormat(bytes, name || type);
+    if (format === 'acsm') {
+        throw new ExtractError('Ce fichier .acsm n’est pas le livre : c’est un jeton de téléchargement Adobe pour un livre protégé (DRM), dont le texte ne peut pas être lu ici. Seuls les livres que Google ou l’éditeur proposent sans DRM (téléchargement direct en EPUB ou PDF) peuvent être importés.');
+    }
     let result;
     if (format === 'pdf') result = await extractPdf(bytes, onProgress);
     else if (format === 'epub') result = await extractEpub(bytes, onProgress);
@@ -382,7 +386,7 @@ export async function extractEpub(bytes, onProgress) {
     if (zip.file('META-INF/encryption.xml')) {
         const enc = await zip.file('META-INF/encryption.xml').async('string');
         if (/EncryptedData/i.test(enc) && !/obfuscation|font/i.test(enc)) {
-            throw new ExtractError('Cet EPUB est protégé par des DRM : son texte ne peut pas être lu.');
+            throw new ExtractError('Cet EPUB est protégé par des DRM (Adobe, Kindle…) : son texte ne peut pas être lu. Importez une version sans DRM du livre.');
         }
     }
 

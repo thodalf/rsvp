@@ -8,10 +8,13 @@
 
 import { extractAny, extractHtmlString, decodeBytes, ExtractError } from './extract.js';
 import { textFromPlain } from './text.js';
+import { GOOGLE_BOOKS_API_KEY } from './config.js';
 
 const SAME_ORIGIN_PROXIES = [
     { host: /^(www\.)?gutenberg\.org$/i, prefix: '/proxy/gutenberg' },
-    { host: /^gutendex\.com$/i, prefix: '/proxy/gutendex' }
+    { host: /^gutendex\.com$/i, prefix: '/proxy/gutendex' },
+    { host: /^www\.googleapis\.com$/i, prefix: '/proxy/googleapis', directFirst: true },   // l'API accepte le CORS
+    { host: /^books\.google\.[a-z.]+$/i, prefix: '/proxy/googlebooks' }
 ];
 
 const PUBLIC_PROXIES = [
@@ -24,10 +27,10 @@ function routesFor(url) {
     const u = new URL(url);
     const routes = [];
     const canProxyLocally = typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
-    for (const p of SAME_ORIGIN_PROXIES) {
-        if (canProxyLocally && p.host.test(u.hostname)) routes.push(p.prefix + u.pathname + u.search);
-    }
-    routes.push(url);
+    const local = SAME_ORIGIN_PROXIES.find(p => canProxyLocally && p.host.test(u.hostname));
+    if (local && local.directFirst) routes.push(url, local.prefix + u.pathname + u.search);
+    else if (local) routes.push(local.prefix + u.pathname + u.search, url);
+    else routes.push(url);
     for (const p of PUBLIC_PROXIES) routes.push(p(url));
     return routes;
 }
@@ -171,6 +174,61 @@ export async function downloadGutenberg(book, { signal, onStatus } = {}) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Google Livres : ouvrages en accès libre et intégral (domaine public), téléchargeables en EPUB/PDF
+// ---------------------------------------------------------------------------------------------
+
+export async function searchGoogleBooks(query, lang, { signal } = {}) {
+    const params = new URLSearchParams({
+        q: query || (lang === 'en' ? 'classic novel' : 'roman'),
+        filter: 'free-ebooks', printType: 'books', maxResults: '40', orderBy: 'relevance'
+    });
+    if (lang) params.set('langRestrict', lang);
+    if (GOOGLE_BOOKS_API_KEY && !GOOGLE_BOOKS_API_KEY.startsWith('__')) params.set('key', GOOGLE_BOOKS_API_KEY);
+    const { bytes } = await fetchBytes('https://www.googleapis.com/books/v1/volumes?' + params, {
+        timeout: 15000, signal, validate: b => decodeBytes(b.subarray(0, 64)).trimStart().startsWith('{')
+    });
+    const data = JSON.parse(decodeBytes(bytes));
+    const out = [];
+    for (const item of data.items || []) {
+        const v = item.volumeInfo || {}, a = item.accessInfo || {};
+        const epub = a.epub && a.epub.isAvailable && a.epub.downloadLink;
+        const pdf = a.pdf && a.pdf.isAvailable && a.pdf.downloadLink;
+        if (!epub && !pdf) continue;
+        out.push({
+            id: item.id,
+            title: [v.title, v.subtitle].filter(Boolean).join(' — ') || 'Sans titre',
+            author: (v.authors || []).join(', '),
+            year: (v.publishedDate || '').slice(0, 4),
+            epub: epub ? httpsGoogle(epub) : '',
+            pdf: pdf ? httpsGoogle(pdf) : ''
+        });
+    }
+    return out;
+}
+
+const httpsGoogle = url => url.replace(/^http:/, 'https:').replace(/books\.google\.[a-z.]+\//, 'books.google.com/');
+
+export async function downloadGoogleBook(book, { signal, onStatus } = {}) {
+    const candidates = [book.epub && { url: book.epub, kind: 'EPUB' }, book.pdf && { url: book.pdf, kind: 'PDF' }].filter(Boolean);
+    let lastError = null;
+    for (const c of candidates) {
+        try {
+            if (onStatus) onStatus(`Téléchargement depuis Google Livres (${c.kind})…`);
+            const { bytes } = await fetchBytes(c.url, {
+                signal, timeout: 40000,
+                validate: b => (b[0] === 0x50 && b[1] === 0x4B) || (b[0] === 0x25 && b[1] === 0x50)
+            });
+            const result = await extractAny(bytes, { name: c.kind === 'EPUB' ? 'livre.epub' : 'livre.pdf' });
+            return { text: result.text, title: book.title || result.title, author: book.author || result.author };
+        } catch (e) {
+            if (signal && signal.aborted) throw e;
+            lastError = e;
+        }
+    }
+    throw new Error('Google Livres n’a pas fourni ce livre. ' + (lastError ? lastError.message : ''));
+}
+
+// ---------------------------------------------------------------------------------------------
 // Import par lien (article web, fichier .txt/.epub/.pdf en ligne, page Gutenberg)
 // ---------------------------------------------------------------------------------------------
 
@@ -182,10 +240,37 @@ export async function importFromUrl(rawUrl, { signal, onStatus } = {}) {
     const pg = /gutenberg\.org\/(?:ebooks|cache\/epub|files)\/(\d+)/.exec(url.href);
     if (pg) return { ...(await downloadGutenberg({ id: Number(pg[1]) }, { signal, onStatus })), source: 'gutenberg', sourceId: Number(pg[1]) };
 
+    if (/^(books|play)\.google\./.test(url.hostname)) {
+        const id = url.searchParams.get('id') || (/\/books\/(?:edition\/[^/]+\/)?([\w-]{12})/.exec(url.pathname) || [])[1];
+        if (!id) throw new ExtractError('Lien Google Livres non reconnu.');
+        return { ...(await importGoogleVolume(id, { signal, onStatus })), source: 'google', sourceId: id };
+    }
+
+    if (/(^|\.)(amazon|amzn)\.[a-z.]+$/.test(url.hostname)) {
+        throw new ExtractError('Les livres Kindle sont protégés par Amazon (DRM) : leur texte ne peut pas être récupéré. Cherchez le même titre dans « Classiques » ou importez une version EPUB sans DRM.');
+    }
+
     if (onStatus) onStatus('Téléchargement…');
     const { bytes, contentType } = await fetchBytes(url.href, { signal });
     const name = decodeURIComponent(url.pathname.split('/').pop() || '');
     const result = await extractAny(bytes, { name, type: contentType });
     if (!result.title) result.title = url.hostname;
     return { ...result, source: 'url', sourceUrl: url.href };
+}
+
+/** Livre Google Livres à partir de son identifiant (lien partagé). */
+export async function importGoogleVolume(id, { signal, onStatus } = {}) {
+    const key = GOOGLE_BOOKS_API_KEY && !GOOGLE_BOOKS_API_KEY.startsWith('__') ? '?key=' + GOOGLE_BOOKS_API_KEY : '';
+    const { bytes } = await fetchBytes(`https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(id)}${key}`, { signal, timeout: 15000 });
+    const item = JSON.parse(decodeBytes(bytes));
+    const v = item.volumeInfo || {}, a = item.accessInfo || {};
+    const book = {
+        id, title: v.title || 'Sans titre', author: (v.authors || []).join(', '),
+        epub: a.epub && a.epub.isAvailable && a.epub.downloadLink ? httpsGoogle(a.epub.downloadLink) : '',
+        pdf: a.pdf && a.pdf.isAvailable && a.pdf.downloadLink ? httpsGoogle(a.pdf.downloadLink) : ''
+    };
+    if ((!book.epub && !book.pdf) || (!/ALL_PAGES/.test(a.viewability || '') && !a.publicDomain)) {
+        throw new ExtractError('Ce livre Google n’est pas en accès libre. Si vous l’avez acheté, exportez-le depuis play.google.com/books (Plus › Exporter › EPUB) puis importez le fichier.');
+    }
+    return downloadGoogleBook(book, { signal, onStatus });
 }

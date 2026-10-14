@@ -9,3 +9,7 @@ export const FIREBASE_CONFIG = {
     messagingSenderId: '__FIREBASE_MESSAGING_SENDER_ID__',
     appId: '__FIREBASE_APP_ID__'
 };
+
+// Clé d'API Google Books (facultative) : sans clé, la recherche Google Livres fonctionne avec le
+// quota anonyme ; une clé (variable Netlify GOOGLE_BOOKS_API_KEY) évite d'atteindre la limite.
+export const GOOGLE_BOOKS_API_KEY = '__GOOGLE_BOOKS_API_KEY__';
